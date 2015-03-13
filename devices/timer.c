@@ -7,7 +7,9 @@
 #include "threads/io.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-  
+
+#include "lib/kernel/list.h"
+ 
 /* See [8254] for hardware details of the 8254 timer chip. */
 
 #if TIMER_FREQ < 19
@@ -29,13 +31,13 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 
-static list wthread_list;
-static lock wthread_list_lock;
+static struct list wthread_list;
+static struct lock wthread_list_lock;
 
 static struct wthread {
-    struct list_elem elem;
-    int64_t tick;           // absolute
-    struct thread* thread;  // thread
+  struct list_elem elem;
+  int64_t tick;           // absolute
+  struct thread* thread;  // thread
 };
 
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
@@ -105,30 +107,37 @@ timer_elapsed (int64_t then)
 }
 
 /* Orders waiting threads descriptins based on ticks */
-list_less_func wthread_less(const struct list_elem* a, const struct list_elem* b, void* aux){
+bool wthread_less(const struct list_elem* a, const struct list_elem* b, void* aux){
     struct wthread* aw = list_entry(a, struct wthread, elem);
     struct wthread* bw = list_entry(b, struct wthread, elem);
 
-    return a->ticks < b->ticks;
+    return aw->tick < bw->tick;
 }
 
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) 
 {
-    ASSERT (intr_get_level () == INTR_ON); // FIXME
-    
-    struct wthread new_wthread;
-    new_wthread.ticks = timer_ticks() + ticks;
-    new_wthread.thread = thread_current ();
+  if (intr_get_level() == INTR_ON)
+    intr_set_level(INTR_OFF);
 
-    lock_acuire(&wthread_list_lock);
+  struct wthread new_wthread;
+  new_wthread.tick = timer_ticks() + ticks;
+  new_wthread.thread = thread_current ();
+
+  lock_acquire(&wthread_list_lock);
+
+  if (list_empty(&wthread_list))
+    list_insert(&wthread_list, &(new_wthread.elem));  
+  else
     list_insert_ordered(&wthread_list, &(new_wthread.elem), wthread_less, NULL);
-    lock_release(&wthread_list_lock);
-    
-    thread_block(); // FIXME: interrupts off
 
-    thread_yield();
+  lock_release(&wthread_list_lock);
+  
+  thread_block();
+  
+  intr_set_level(INTR_ON);
+  thread_yield();
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -163,21 +172,18 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-    lock_acquire(&wthread_list_lock);
+  // FIXME
+  struct wthread* curr = list_entry(list_pop_front(&wthread_list), 
+                                    struct wthread, 
+                                    elem);
 
-    struct wthread* curr = list_entry(list_pop_front(&wthread_list),
-                                      struct wthread, 
-                                      elem);
+  while(!list_empty(&wthread_list) && (curr->tick <= ticks)){
+    thread_unblock(curr->thread);
+    curr = list_entry(list_pop_front(&wthread_list), struct wthread, elem);
+  }
 
-    while(!list_empty(wthread_list) && (curr->tick <= ticks)){
-        thread_unblock(curr->thread);
-        curr = list_entry(list_pop_front(&wthread_list), struct wthread, elem);
-    }
-
-    lock_release(&wthread_list_lock);
-
-    ticks++;
-    thread_tick ();
+  ticks++;
+  thread_tick ();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
