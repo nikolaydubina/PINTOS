@@ -1,1 +1,13 @@
-PASS
+FAIL
+Kernel panic in run: PANIC at ../../lib/kernel/list.c:290 in list_front(): assertion `!list_empty (list)' failed.
+Call stack: 0xc0107266 0xc010786f 0xc01077f7 0xc0103888 0xc0101675 0xc010184b 0xc01010bd 0xc0100784 0xc010007f
+Translation of call stack:
+0xc0107266: debug_panic (.../../lib/kernel/debug.c:34)
+0xc010786f: list_front (.../../lib/kernel/list.c:291)
+0xc01077f7: list_pop_front (.../../lib/kernel/list.c:270)
+0xc0103888: timer_interrupt (...../../devices/timer.c:174)
+0xc0101675: intr_handler (..../threads/interrupt.c:361)
+0xc010184b: intr_entry (threads/intr-stubs.S:38)
+0xc01010bd: intr_enable (...../threads/interrupt.c:87)
+0xc0100784: thread_start (..../../threads/thread.c:116)
+0xc010007f: main (.../../../threads/init.c:108)
