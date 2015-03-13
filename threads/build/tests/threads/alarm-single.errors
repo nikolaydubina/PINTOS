@@ -1,1 +1,27 @@
-/bin/sh: pintos: command not found
+perl: warning: Setting locale failed.
+perl: warning: Please check that your locale settings:
+	LANGUAGE = (unset),
+	LC_ALL = (unset),
+	LC_PAPER = "en_US.UTF-8",
+	LC_ADDRESS = "en_US.UTF-8",
+	LC_MONETARY = "en_US.UTF-8",
+	LC_NUMERIC = "en_US.UTF-8",
+	LC_TELEPHONE = "en_US.UTF-8",
+	LC_IDENTIFICATION = "en_US.UTF-8",
+	LC_MEASUREMENT = "en_US.UTF-8",
+	LC_TIME = "en_US.UTF-8",
+	LC_NAME = "en_US.UTF-8",
+	LANG = "C"
+    are supported and installed on your system.
+perl: warning: Falling back to the standard locale ("C").
+========================================================================
+                       Bochs x86 Emulator 2.2.6
+              Build from CVS snapshot on January 29, 2006
+========================================================================
+00000000000i[     ] reading configuration from bochsrc.txt
+00000000000i[     ] installing nogui module as the Bochs GUI
+00000000000i[     ] using log file bochsout.txt
+========================================================================
+Bochs is exiting with the following message:
+[UNMP ] Shutdown port: shutdown requested
+========================================================================

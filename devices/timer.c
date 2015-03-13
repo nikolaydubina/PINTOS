@@ -29,6 +29,14 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 
+static list wthread_list;
+
+static struct wthread {
+    struct list_elem elem;
+    int64_t ticks;          // absolute
+    struct thread* thread;  // thread
+};
+
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
    corresponding interrupt. */
@@ -44,6 +52,8 @@ timer_init (void)
   outb (0x40, count >> 8);
 
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+
+  list_init(&wthread_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -92,15 +102,25 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
+/* Orders waiting threads descriptins based on ticks */
+list_less_func wthread_less(const struct list_elem* a, const struct list_elem* b, void* aux){
+    struct wthread* aw = list_entry(a, struct wthread, elem);
+    struct wthread* bw = list_entry(b, struct wthread, elem);
+
+    return a->ticks < b->ticks;
+}
+
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+    ASSERT (intr_get_level () == INTR_ON); // FIXME
+    
+    struct wthread new_wthread;
+    new_wthread.ticks = timer_ticks() + ticks;
+    new_wthread.thread = thread_current ();
 
-  ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+    list_insert_ordered(&wthread_list, &(new_wthread.elem), wthread_less, NULL);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -135,8 +155,16 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-  ticks++;
-  thread_tick ();
+    struct list_elem* curr_elem = list_pop_front(&wthread_list);
+    struct wthread* curr = list_entry(curr_elem, struct wthread, elem);
+    while(!list_empty(wthread_list) && (curr->ticks == tick)){
+        // TODO: yeild thread or change status?
+
+        curr_elem = list_pop_front(&wthread_list);
+        curr = list_entry(curr_elem, struct wthread, elem);
+    }
+    ticks++;
+    thread_tick ();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
