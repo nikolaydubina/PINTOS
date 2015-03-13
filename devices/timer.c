@@ -30,10 +30,11 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 
 static list wthread_list;
+static lock wthread_list_lock;
 
 static struct wthread {
     struct list_elem elem;
-    int64_t ticks;          // absolute
+    int64_t tick;           // absolute
     struct thread* thread;  // thread
 };
 
@@ -53,6 +54,7 @@ timer_init (void)
 
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 
+  lock_init(&wthread_list_lock);
   list_init(&wthread_list);
 }
 
@@ -120,7 +122,13 @@ timer_sleep (int64_t ticks)
     new_wthread.ticks = timer_ticks() + ticks;
     new_wthread.thread = thread_current ();
 
+    lock_acuire(&wthread_list_lock);
     list_insert_ordered(&wthread_list, &(new_wthread.elem), wthread_less, NULL);
+    lock_release(&wthread_list_lock);
+    
+    thread_block(); // FIXME: interrupts off
+
+    thread_yield();
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -155,14 +163,19 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-    struct list_elem* curr_elem = list_pop_front(&wthread_list);
-    struct wthread* curr = list_entry(curr_elem, struct wthread, elem);
-    while(!list_empty(wthread_list) && (curr->ticks == tick)){
-        // TODO: yeild thread or change status?
+    lock_acquire(&wthread_list_lock);
 
-        curr_elem = list_pop_front(&wthread_list);
-        curr = list_entry(curr_elem, struct wthread, elem);
+    struct wthread* curr = list_entry(list_pop_front(&wthread_list),
+                                      struct wthread, 
+                                      elem);
+
+    while(!list_empty(wthread_list) && (curr->tick <= ticks)){
+        thread_unblock(curr->thread);
+        curr = list_entry(list_pop_front(&wthread_list), struct wthread, elem);
     }
+
+    lock_release(&wthread_list_lock);
+
     ticks++;
     thread_tick ();
 }
