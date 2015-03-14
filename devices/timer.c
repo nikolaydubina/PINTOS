@@ -118,22 +118,19 @@ bool wthread_less(const struct list_elem* a, const struct list_elem* b, void* au
 void
 timer_sleep (int64_t ticks) 
 {
-  ASSERT(ticks >= 0);
-
   struct wthread new_wthread;
-  new_wthread.tick = timer_ticks() + ticks;
+  new_wthread.tick = timer_ticks() + abs(ticks); // NOTE: ticks < 0 ?
   new_wthread.thread = thread_current ();
-
+  
+  barrier();
   lock_acquire(&wthread_list_lock);
-  list_push_front(&wthread_list, &(new_wthread.elem));  
+  list_insert_ordered(&wthread_list, &(new_wthread.elem), wthread_less, NULL);
   lock_release(&wthread_list_lock);
 
-  intr_set_level(INTR_OFF);
-
+  intr_disable();
   thread_block();
 
-  intr_set_level(INTR_ON);
-  
+  intr_enable();
   thread_yield();
 }
 
@@ -169,28 +166,16 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-  // FIXME
   if (!list_empty(&wthread_list)){
-    //struct wthread* curr = list_entry(list_pop_front(&wthread_list), 
-    //                                  struct wthread, 
-    //                                  elem);
 
-    //while(!list_empty(&wthread_list) && (curr->tick <= ticks)){
-    //  thread_unblock(curr->thread);
-    //  curr = list_entry(list_pop_front(&wthread_list), struct wthread, elem);
-    //}
+    struct list_elem* e = list_begin(&wthread_list);
+    struct wthread* curr = list_entry(e, struct wthread, elem);
 
-    struct list_elem* e;
-    for (e = list_begin(&wthread_list); e != list_end(&wthread_list);
-         e = list_next(e))
-    {
-      struct wthread* curr = list_entry(list_pop_front(&wthread_list),
-                                        struct wthread,
-                                        elem);
-
-      if (curr->tick <= ticks)
+    while((e != list_end(&wthread_list)) && (curr->tick == ticks)){
         thread_unblock(curr->thread);
-      list_remove(e);
+      
+        e = list_remove(e);
+        curr = list_entry(e, struct wthread, elem);
     }
   }
 

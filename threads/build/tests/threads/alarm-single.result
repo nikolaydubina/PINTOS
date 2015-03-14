@@ -1,12 +1,1 @@
-FAIL
-Kernel panic in run: PANIC at ../../tests/threads/tests.c:93 in fail(): test failed
-Call stack: 0xc0107256 0xc0109375 0xc010968a 0xc01093ae 0xc01092ca 0xc010052f 0xc01005f6 0xc010009e
-Translation of call stack:
-0xc0107256: debug_panic (.../../lib/kernel/debug.c:34)
-0xc0109375: pass (.../tests/threads/tests.c:99)
-0xc010968a: test_sleep (.../threads/alarm-wait.c:126)
-0xc01093ae: test_alarm_single (...s/threads/alarm-wait.c:19)
-0xc01092ca: run_test (.../tests/threads/tests.c:57)
-0xc010052f: run_task (.../../../threads/init.c:270)
-0xc01005f6: run_actions (.../../../threads/init.c:319)
-0xc010009e: main (.../../../threads/init.c:124)
+PASS
