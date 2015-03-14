@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# build
+cd ../../
+./make_all
+cd threads/build
+
+# run test
+pintos -v -- -q run $1

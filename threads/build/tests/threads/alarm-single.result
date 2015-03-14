@@ -1,13 +1,12 @@
 FAIL
-Kernel panic in run: PANIC at ../../lib/kernel/list.c:290 in list_front(): assertion `!list_empty (list)' failed.
-Call stack: 0xc0107266 0xc010786f 0xc01077f7 0xc0103888 0xc0101675 0xc010184b 0xc01010bd 0xc0100784 0xc010007f
+Kernel panic in run: PANIC at ../../tests/threads/tests.c:93 in fail(): test failed
+Call stack: 0xc0107256 0xc0109375 0xc010968a 0xc01093ae 0xc01092ca 0xc010052f 0xc01005f6 0xc010009e
 Translation of call stack:
-0xc0107266: debug_panic (.../../lib/kernel/debug.c:34)
-0xc010786f: list_front (.../../lib/kernel/list.c:291)
-0xc01077f7: list_pop_front (.../../lib/kernel/list.c:270)
-0xc0103888: timer_interrupt (...../../devices/timer.c:174)
-0xc0101675: intr_handler (..../threads/interrupt.c:361)
-0xc010184b: intr_entry (threads/intr-stubs.S:38)
-0xc01010bd: intr_enable (...../threads/interrupt.c:87)
-0xc0100784: thread_start (..../../threads/thread.c:116)
-0xc010007f: main (.../../../threads/init.c:108)
+0xc0107256: debug_panic (.../../lib/kernel/debug.c:34)
+0xc0109375: pass (.../tests/threads/tests.c:99)
+0xc010968a: test_sleep (.../threads/alarm-wait.c:126)
+0xc01093ae: test_alarm_single (...s/threads/alarm-wait.c:19)
+0xc01092ca: run_test (.../tests/threads/tests.c:57)
+0xc010052f: run_task (.../../../threads/init.c:270)
+0xc01005f6: run_actions (.../../../threads/init.c:319)
+0xc010009e: main (.../../../threads/init.c:124)

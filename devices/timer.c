@@ -118,25 +118,22 @@ bool wthread_less(const struct list_elem* a, const struct list_elem* b, void* au
 void
 timer_sleep (int64_t ticks) 
 {
-  if (intr_get_level() == INTR_ON)
-    intr_set_level(INTR_OFF);
+  ASSERT(ticks >= 0);
 
   struct wthread new_wthread;
   new_wthread.tick = timer_ticks() + ticks;
   new_wthread.thread = thread_current ();
 
   lock_acquire(&wthread_list_lock);
-
-  if (list_empty(&wthread_list))
-    list_insert(&wthread_list, &(new_wthread.elem));  
-  else
-    list_insert_ordered(&wthread_list, &(new_wthread.elem), wthread_less, NULL);
-
+  list_push_front(&wthread_list, &(new_wthread.elem));  
   lock_release(&wthread_list_lock);
-  
+
+  intr_set_level(INTR_OFF);
+
   thread_block();
-  
+
   intr_set_level(INTR_ON);
+  
   thread_yield();
 }
 
@@ -173,13 +170,28 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   // FIXME
-  struct wthread* curr = list_entry(list_pop_front(&wthread_list), 
-                                    struct wthread, 
-                                    elem);
+  if (!list_empty(&wthread_list)){
+    //struct wthread* curr = list_entry(list_pop_front(&wthread_list), 
+    //                                  struct wthread, 
+    //                                  elem);
 
-  while(!list_empty(&wthread_list) && (curr->tick <= ticks)){
-    thread_unblock(curr->thread);
-    curr = list_entry(list_pop_front(&wthread_list), struct wthread, elem);
+    //while(!list_empty(&wthread_list) && (curr->tick <= ticks)){
+    //  thread_unblock(curr->thread);
+    //  curr = list_entry(list_pop_front(&wthread_list), struct wthread, elem);
+    //}
+
+    struct list_elem* e;
+    for (e = list_begin(&wthread_list); e != list_end(&wthread_list);
+         e = list_next(e))
+    {
+      struct wthread* curr = list_entry(list_pop_front(&wthread_list),
+                                        struct wthread,
+                                        elem);
+
+      if (curr->tick <= ticks)
+        thread_unblock(curr->thread);
+      list_remove(e);
+    }
   }
 
   ticks++;
