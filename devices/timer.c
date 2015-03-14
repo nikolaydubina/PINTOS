@@ -108,30 +108,35 @@ timer_elapsed (int64_t then)
 
 /* Orders waiting threads descriptins based on ticks */
 bool wthread_less(const struct list_elem* a, const struct list_elem* b, void* aux){
-    struct wthread* aw = list_entry(a, struct wthread, elem);
-    struct wthread* bw = list_entry(b, struct wthread, elem);
+  struct wthread* aw = list_entry(a, struct wthread, elem);
+  struct wthread* bw = list_entry(b, struct wthread, elem);
 
-    return aw->tick < bw->tick;
+  bool ret = true;
+
+  if(aw->tick == bw->tick)
+    ret = aw->thread->priority > bw->thread->priority;
+  else
+    ret = aw->tick < bw->tick;
+
+  return ret;
 }
 
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) 
 {
+  intr_disable();
   struct wthread new_wthread;
   new_wthread.tick = timer_ticks() + abs(ticks); // NOTE: ticks < 0 ?
   new_wthread.thread = thread_current ();
   
-  barrier();
   lock_acquire(&wthread_list_lock);
   list_insert_ordered(&wthread_list, &(new_wthread.elem), wthread_less, NULL);
   lock_release(&wthread_list_lock);
 
-  intr_disable();
   thread_block();
 
   intr_enable();
-  thread_yield();
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -172,10 +177,10 @@ timer_interrupt (struct intr_frame *args UNUSED)
     struct wthread* curr = list_entry(e, struct wthread, elem);
 
     while((e != list_end(&wthread_list)) && (curr->tick == ticks)){
-        thread_unblock(curr->thread);
-      
-        e = list_remove(e);
-        curr = list_entry(e, struct wthread, elem);
+      thread_unblock(curr->thread);
+    
+      e = list_remove(e);
+      curr = list_entry(e, struct wthread, elem);
     }
   }
 
