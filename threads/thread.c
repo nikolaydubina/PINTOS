@@ -235,9 +235,16 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
+
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+  
+  //debug
+  //if (intr_get_level() == INTR_ON)
+  //  printf("%d intr on\n", t->tid);
+  //else
+  //  printf("%d int off\n", t->tid);
 }
 
 /* Returns the name of the running thread. */
