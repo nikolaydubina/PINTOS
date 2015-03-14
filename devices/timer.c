@@ -111,7 +111,7 @@ bool wthread_less(const struct list_elem* a, const struct list_elem* b, void* au
   struct wthread* aw = list_entry(a, struct wthread, elem);
   struct wthread* bw = list_entry(b, struct wthread, elem);
 
-  bool ret = true;
+  bool ret;
 
   if(aw->tick == bw->tick)
     ret = aw->thread->priority > bw->thread->priority;
@@ -125,18 +125,26 @@ bool wthread_less(const struct list_elem* a, const struct list_elem* b, void* au
 void
 timer_sleep (int64_t ticks) 
 {
-  intr_disable();
   struct wthread new_wthread;
-  new_wthread.tick = timer_ticks() + abs(ticks); // NOTE: ticks < 0 ?
+  new_wthread.tick = timer_ticks() + abs(ticks); // NOTE: ticks < 0 -> abs(ticks)
   new_wthread.thread = thread_current ();
   
   lock_acquire(&wthread_list_lock);
   list_insert_ordered(&wthread_list, &(new_wthread.elem), wthread_less, NULL);
   lock_release(&wthread_list_lock);
 
+  enum intr_level old_level = intr_disable();
   thread_block();
-
-  intr_enable();
+  barrier();
+  /* 
+   * no need to set previous interrupt level,
+   * because thread at this point becomes in ready state
+   * and next by scheduler dispatch it can become running and
+   * handle interrupts.
+   * i.e. 
+   * it is not job of this function
+   * enabling interrupts should be done by scheduler dispatch
+   */
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -178,14 +186,13 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
     while((e != list_end(&wthread_list)) && (curr->tick == ticks)){
       thread_unblock(curr->thread);
-    
       e = list_remove(e);
       curr = list_entry(e, struct wthread, elem);
     }
   }
 
   ticks++;
-  thread_tick ();
+  thread_tick();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
