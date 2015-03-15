@@ -71,25 +71,6 @@ static void schedule (void);
 void schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-static struct hash thread_children;
-static struct hash thread_parents;
-
-static unsigned thread_hash_hash_func(const struct hash_elem *e, void *aux){
-  struct thread* curr = hash_entry(e, struct thread, helem);
-
-  return curr->tid;
-}
-
-static bool thread_hash_less_func(const struct hash_elem *a, 
-                           const struct hash_elem *b,
-                           void *aux)
-{
-  struct thread* at = hash_entry(a, struct thread, helem);
-  struct thread* bt = hash_entry(b, struct thread, helem);
-
-  return at->tid < bt->tid;
-}
-
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -110,9 +91,6 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
-
-  hash_init(&thread_children, thread_hash_hash_func, thread_hash_less_func, NULL);
-  hash_init(&thread_parents, thread_hash_hash_func, thread_hash_less_func, NULL);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -203,6 +181,10 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+
+  /* Initialize for priority donation */
+  list_init(&t->waiters);
+  list_init(&t->holders);
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -352,12 +334,13 @@ thread_yield (void)
 }
 
 void update_priority(struct thread* cthread, int lvl){
-  if ((lvl < DONATE_MAXLVL) && (hash_find(&thread_children, &cthread->helem) != NULL)){
-    struct list* chall = hash_findall(&thread_children, &cthread->helem);
-    struct hash_elem* e;
+  if (lvl < DONATE_MAXLVL){
+    struct list_elem* e;
 
-    for(e = list_begin(chall); e != list_end(chall); e = list_next(e)){
-      struct thread* cchild = hash_entry(e, struct thread, helem);
+    for(e = list_begin(&cthread->holders); e != list_end(&cthread->holders);
+        e = list_next(e))
+    {
+      struct thread* cchild = list_entry(e, struct thread, elem);
       
       if (cchild->priority < cthread->priority){
         cchild->priority = cthread->priority;

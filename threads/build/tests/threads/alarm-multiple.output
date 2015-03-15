@@ -1,13 +1,13 @@
-Writing command line to /tmp/hjnkY3jFPQ.dsk...
+Writing command line to /tmp/Mrv17TgLyy.dsk...
 squish-pty bochs -q
 Kernel command line: -q run alarm-multiple
-Kernel PANIC at ../../threads/thread.c:292 in thread_current(): assertion `is_thread (t)' failed.
-Call stack: 0xc0107476 0xc0100ae3 0xc0102af0 0xc0102946 0xc0102efb 0xc01032f5 0xc0108b13 0xc010074a 0xc0100036.
+Kernel PANIC at ../../lib/kernel/list.c:171 in list_insert(): assertion `is_interior (before) || is_tail (before)' failed.
+Call stack: 0xc0107476 0xc01077ce 0xc0107992 0xc01026b3 0xc0102981 0xc0102efb 0xc01032f5 0xc0108b13 0xc0100785 0xc0100036.
 The `backtrace' program can make call stacks useful.
 Read "Backtraces" in the "Debugging Tools" chapter
 of the Pintos documentation for more information.
 Timer: 0 ticks
 Thread: 0 idle ticks, 0 kernel ticks, 0 user ticks
-Console: 473 characters output
+Console: 509 characters output
 Keyboard: 0 keys pressed
 Powering off...

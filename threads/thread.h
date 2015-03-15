@@ -3,7 +3,6 @@
 
 #include <debug.h>
 #include <list.h>
-#include <hash.h>
 #include <stdint.h>
 
 /* States in a thread's life cycle. */
@@ -93,9 +92,11 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
 
+    struct list waiters;                /* Threads that are waiting this thread */
+    struct list holders;                /* This thread is waiting for these threads */
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    struct hash_elem helem;             /* Hash element. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
