@@ -83,8 +83,8 @@ void hash_destroy (struct hash *, hash_action_func *);
 struct hash_elem *hash_insert (struct hash *, struct hash_elem *);
 struct hash_elem *hash_replace (struct hash *, struct hash_elem *);
 struct hash_elem *hash_find (struct hash *, struct hash_elem *);
-struct list* hash_findall (struct hash *, struct hash_elem *);
 struct hash_elem *hash_delete (struct hash *, struct hash_elem *);
+struct list* hash_findall (struct hash *, struct hash_elem *);
 
 /* Iteration. */
 void hash_apply (struct hash *, hash_action_func *);

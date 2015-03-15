@@ -29,6 +29,7 @@
 #include "threads/synch.h"
 #include <stdio.h>
 #include <string.h>
+#include <list.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
@@ -182,6 +183,16 @@ lock_init (struct lock *lock)
   sema_init (&lock->semaphore, 1);
 }
 
+/* instance of lock_aquire
+ * used for priority donation */
+static struct lock_aquire_inst{
+    struct thread* waiter;
+    struct thread* holder;
+
+    struct list_elem waiter_elem;
+    struct list_elem holder_elem;
+};
+
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
    thread.
@@ -197,7 +208,18 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  /* scope of lock_acuire_inst is the same as
+   * priority donation instance - "arrow" */
+  struct lock_acquire_inst curr;
+
+  list_push_front(&lock->holder->waiters, &curr->holder_elem);
+  list_push_front(&thread_current()->holders, &curr->waiter_elem);
+
+  update_priority(thread_current(), DONATE_MAXLVL);
   sema_down (&lock->semaphore);
+
+  list_remove(&curr->holder_elem);
+  list_remove(&curr->waiter_elem);
   lock->holder = thread_current ();
 }
 
