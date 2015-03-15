@@ -71,6 +71,25 @@ static void schedule (void);
 void schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+static struct hash thread_children;
+static struct hash thread_parents;
+
+static unsigned thread_hash_hash_func(const struct hash_elem *e, void *aux){
+  struct thread* curr = hash_entry(e, struct thread, helem);
+
+  return curr->tid;
+}
+
+static bool thread_hash_less_func(const struct hash_elem *a, 
+                           const struct hash_elem *b,
+                           void *aux)
+{
+  struct thread* at = hash_entry(a, struct thread, helem);
+  struct thread* bt = hash_entry(b, struct thread, helem);
+
+  return at->tid < bt->tid;
+}
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -91,6 +110,9 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+
+  hash_init(&thread_children, thread_hash_hash_func, thread_hash_less_func, NULL);
+  hash_init(&thread_parents, thread_hash_hash_func, thread_hash_less_func, NULL);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -299,6 +321,18 @@ thread_exit (void)
   NOT_REACHED ();
 }
 
+/* Orders threads based on priority. used in ready_list */
+bool thread_less(const struct list_elem* a, const struct list_elem* b, void* aux){
+  struct thread* an = list_entry(a, struct thread, elem);
+  struct thread* bn = list_entry(b, struct thread, elem);
+
+  bool ret;
+
+  ret = an->priority > bn->priority;
+
+  return ret;
+}
+
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
 void
@@ -311,24 +345,54 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (curr != idle_thread) 
-    list_push_back (&ready_list, &curr->elem);
+    list_insert_ordered(&ready_list, &curr->elem, thread_less, NULL);
   curr->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
+}
+
+void update_priority(struct thread* cthread, int lvl){
+  if ((lvl < DONATE_MAXLVL) && (hash_find(&thread_children, &cthread->helem) != NULL)){
+    struct list* chall = hash_findall(&thread_children, &cthread->helem);
+    struct hash_elem* e;
+
+    for(e = list_begin(chall); e != list_end(chall); e = list_next(e)){
+      struct thread* cchild = hash_entry(e, struct thread, helem);
+      
+      if (cchild->priority < cthread->priority){
+        cchild->priority = cthread->priority;
+        update_priority(cchild, lvl + 1);
+      }
+    }
+  }
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  ASSERT(new_priority >= PRI_MIN);
+  ASSERT(new_priority <= PRI_MAX);
+
+  enum intr_level old_level = intr_disable();
+
+  struct thread* curr_thread = thread_current();
+  curr_thread->priority = new_priority;
+
+  update_priority(curr_thread, DONATE_MAXLVL);
+  list_sort(&ready_list, thread_less, NULL);
+
+  if (&curr_thread->elem != list_begin(&ready_list))
+    thread_yield();
+
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return thread_current()->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */

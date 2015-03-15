@@ -3,6 +3,7 @@
 
 #include <debug.h>
 #include <list.h>
+#include <hash.h>
 #include <stdint.h>
 
 /* States in a thread's life cycle. */
@@ -23,6 +24,9 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+/* Scheduling */
+#define DONATE_MAXLVL 8                 /* Maximum level of donation */
 
 /* A kernel thread or user process.
 
@@ -91,6 +95,7 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct hash_elem helem;             /* Hash element. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
