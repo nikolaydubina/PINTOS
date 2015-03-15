@@ -133,9 +133,8 @@ timer_sleep (int64_t ticks)
   list_insert_ordered(&wthread_list, &(new_wthread.elem), wthread_less, NULL);
   lock_release(&wthread_list_lock);
 
-  enum intr_level old_level = intr_disable();
+  intr_disable();
   thread_block();
-  barrier();
   /* 
    * no need to set previous interrupt level,
    * because thread at this point becomes in ready state
