@@ -66,7 +66,7 @@ test_sleep (int thread_cnt, int iterations)
   timer_sleep (100 + iterations * 10 + 100);
 
   /* Print completion order. */
-  msg ("iteration 0, thread 0: woke up after %d ticks", output[0] - 1); // FIXME: change back to 0 !
+  msg ("iteration 0, thread 0: woke up after %d ticks", output[0]);
   for (i = 1; i < test.output_pos - output; i++) 
     msg ("iteration %d, thread %d: woke up %d ticks later",
          i / thread_cnt, i % thread_cnt, output[i] - output[i - 1]);
