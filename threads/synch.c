@@ -183,17 +183,6 @@ lock_init (struct lock *lock)
   sema_init (&lock->semaphore, 1);
 }
 
-/* instance of lock_acquire
- * used for priority donation */
-struct lock_acquire_inst{
-    struct thread* waiter;
-    struct thread* holder;
-
-    struct lock* lock;
-
-    struct list_elem waiter_elem;
-    struct list_elem holder_elem;
-};
 
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
