@@ -336,7 +336,7 @@ void update_priority(struct thread* cthread, int lvl){
     for(e = list_begin(&cthread->holders); e != list_end(&cthread->holders);
         e = list_next(e))
     {
-      struct thread* cchild = list_entry(e, struct thread, elem);
+      struct thread* cchild = list_entry(e, struct lock_acquire_inst, holder_elem)->holder;
       
       if (cchild->priority < cthread->priority){
         cchild->priority = cthread->priority;
@@ -369,9 +369,9 @@ thread_set_priority (int new_priority)
       max_priority = curr_prp;
   }
   
-  curr_thread->priority = max_priority; // TODO: add on fall to set_priority
+  curr_thread->priority = max_priority; 
 
-  update_priority(curr_thread, DONATE_MAXLVL);
+  update_priority(curr_thread, 0);
   list_sort(&ready_list, thread_less, NULL);
 
   if (curr_thread->priority < 
