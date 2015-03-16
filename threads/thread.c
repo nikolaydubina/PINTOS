@@ -334,7 +334,7 @@ thread_yield (void)
 }
 
 void update_priority(struct thread* cthread, int lvl){
-  if (lvl < DONATE_MAXLVL){
+  if (lvl < DONATE_MAXLVL && lvl >= 0){
     struct list_elem* e;
 
     for(e = list_begin(&cthread->holders); e != list_end(&cthread->holders);
@@ -360,7 +360,7 @@ thread_set_priority (int new_priority)
   enum intr_level old_level = intr_disable();
 
   struct thread* curr_thread = thread_current();
-  curr_thread->priority = new_priority;
+  curr_thread->set_priority = new_priority;
 
   update_priority(curr_thread, DONATE_MAXLVL);
   list_sort(&ready_list, thread_less, NULL);
@@ -493,6 +493,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->set_priority = priority;
   t->magic = THREAD_MAGIC;
 }
 
