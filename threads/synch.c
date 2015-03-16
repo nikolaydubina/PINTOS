@@ -185,7 +185,7 @@ lock_init (struct lock *lock)
 
 /* instance of lock_acquire
  * used for priority donation */
-static struct lock_acquire_inst{
+struct lock_acquire_inst{
     struct thread* waiter;
     struct thread* holder;
 
@@ -221,15 +221,13 @@ lock_acquire (struct lock *lock)
     list_push_front(&(thread_current())->holders, &curr.waiter_elem);
     list_push_front(&(lock->holder)->waiters, &curr.holder_elem);
 
-//    printf("pushed\n");
     update_priority(thread_current(), DONATE_MAXLVL);
-//    printf("updated\n");
   }
 
   sema_down(&lock->semaphore);
 
   if (lock->holder != NULL)
-    update_priority(lock->holder, DONATE_MAXLVL - 1);
+    update_priority(lock->holder, DONATE_MAXLVL);
 
   lock->holder = thread_current ();
 }
@@ -270,7 +268,7 @@ lock_release (struct lock *lock)
   struct list_elem* e;
   for(e = list_begin(&(lock->holder)->waiters); e != list_end(&(lock->holder)->waiters);)
   {
-    struct lock_acquire_inst* curr = list_entry(e, struct lock_acquire_inst, holder_elem);
+    struct lock_acquire_inst* curr = list_entry(e, struct lock_acquire_inst, waiter_elem);
     if (curr->lock == lock){
       list_remove(&curr->waiter_elem);
       e = list_remove(e);

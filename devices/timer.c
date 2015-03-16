@@ -32,7 +32,6 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 
 static struct list wthread_list;
-static struct lock wthread_list_lock;
 
 static struct wthread {
   struct list_elem elem;
@@ -56,7 +55,6 @@ timer_init (void)
 
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 
-  lock_init(&wthread_list_lock);
   list_init(&wthread_list);
 }
 
@@ -125,15 +123,13 @@ bool wthread_less(const struct list_elem* a, const struct list_elem* b, void* au
 void
 timer_sleep (int64_t ticks) 
 {
+  intr_disable();
   struct wthread new_wthread;
   new_wthread.tick = timer_ticks() + abs(ticks); // NOTE: ticks < 0 -> abs(ticks)
   new_wthread.thread = thread_current ();
   
-  lock_acquire(&wthread_list_lock);
   list_insert_ordered(&wthread_list, &(new_wthread.elem), wthread_less, NULL);
-  lock_release(&wthread_list_lock);
 
-  intr_disable();
   thread_block();
   /* 
    * no need to set previous interrupt level,
