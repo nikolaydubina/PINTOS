@@ -174,19 +174,18 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
+  ticks++;
   if (!list_empty(&wthread_list)){
 
     struct list_elem* e = list_begin(&wthread_list);
     struct wthread* curr = list_entry(e, struct wthread, elem);
 
-    while((e != list_end(&wthread_list)) && (curr->tick == ticks)){
+    while((e != list_end(&wthread_list)) && (curr->tick <= ticks)){
       thread_unblock(curr->thread);
       e = list_remove(e);
       curr = list_entry(e, struct wthread, elem);
     }
   }
-
-  ticks++;
   thread_tick();
 }
 
