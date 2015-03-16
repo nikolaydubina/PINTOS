@@ -183,11 +183,13 @@ lock_init (struct lock *lock)
   sema_init (&lock->semaphore, 1);
 }
 
-/* instance of lock_aquire
+/* instance of lock_acquire
  * used for priority donation */
-static struct lock_aquire_inst{
+static struct lock_acquire_inst{
     struct thread* waiter;
     struct thread* holder;
+
+    struct lock* lock;
 
     struct list_elem waiter_elem;
     struct list_elem holder_elem;
@@ -211,15 +213,17 @@ lock_acquire (struct lock *lock)
   /* scope of lock_acuire_inst is the same as
    * priority donation instance - "arrow" */
   struct lock_acquire_inst curr;
+  curr.waiter = thread_current();
+  curr.holder = lock->holder;
+  curr.lock = lock;
 
-  list_push_front(&lock->holder->waiters, &curr->holder_elem);
-  list_push_front(&thread_current()->holders, &curr->waiter_elem);
+  list_push_front(&(thread_current())->holders, &curr.waiter_elem);
+  list_push_front(&(lock->holder)->waiters, &curr.holder_elem);
 
   update_priority(thread_current(), DONATE_MAXLVL);
-  sema_down (&lock->semaphore);
+  sema_down(&lock->semaphore);
 
-  list_remove(&curr->holder_elem);
-  list_remove(&curr->waiter_elem);
+  update_priority(lock->holder, DONATE_MAXLVL - 1);
   lock->holder = thread_current ();
 }
 
@@ -254,6 +258,24 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+
+  int new_priority = lock->holder->set_priority;
+  struct list_elem* e;
+  for(e = list_begin(&(lock->holder)->waiters); e != list_end(&(lock->holder)->waiters);)
+  {
+    struct lock_acquire_inst* curr = list_entry(e, struct lock_acquire_inst, holder_elem);
+    if (curr->lock == lock)
+      list_remove(&curr->waiter_elem);
+    else {
+      if (new_priority > curr->waiter->priority)
+        new_priority = curr->waiter->priority;
+      e = list_next(e)
+    }
+  }
+
+  list_remove(&curr->holder_elem);
+  lock->holder->priority = new_priority;
+  update_priority(lock->holder, DONATE_MAXLVL - 1);
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);

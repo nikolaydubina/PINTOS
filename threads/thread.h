@@ -91,6 +91,7 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int set_priority;                   /* Latest priority set explicitly */
 
     struct list waiters;                /* Threads that are waiting this thread */
     struct list holders;                /* This thread is waiting for these threads */
