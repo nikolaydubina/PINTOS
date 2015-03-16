@@ -123,11 +123,11 @@ bool wthread_less(const struct list_elem* a, const struct list_elem* b, void* au
 void
 timer_sleep (int64_t ticks) 
 {
-  intr_disable();
   struct wthread new_wthread;
   new_wthread.tick = timer_ticks() + abs(ticks); // NOTE: ticks < 0 -> abs(ticks)
   new_wthread.thread = thread_current ();
   
+  intr_disable();
   list_insert_ordered(&wthread_list, &(new_wthread.elem), wthread_less, NULL);
 
   thread_block();
