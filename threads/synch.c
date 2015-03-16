@@ -217,13 +217,20 @@ lock_acquire (struct lock *lock)
   curr.holder = lock->holder;
   curr.lock = lock;
 
-  list_push_front(&(thread_current())->holders, &curr.waiter_elem);
-  list_push_front(&(lock->holder)->waiters, &curr.holder_elem);
+  if (lock->holder != NULL){
+    list_push_front(&(thread_current())->holders, &curr.waiter_elem);
+    list_push_front(&(lock->holder)->waiters, &curr.holder_elem);
 
-  update_priority(thread_current(), DONATE_MAXLVL);
+//    printf("pushed\n");
+    update_priority(thread_current(), DONATE_MAXLVL);
+//    printf("updated\n");
+  }
+
   sema_down(&lock->semaphore);
 
-  update_priority(lock->holder, DONATE_MAXLVL - 1);
+  if (lock->holder != NULL)
+    update_priority(lock->holder, DONATE_MAXLVL - 1);
+
   lock->holder = thread_current ();
 }
 
@@ -264,16 +271,17 @@ lock_release (struct lock *lock)
   for(e = list_begin(&(lock->holder)->waiters); e != list_end(&(lock->holder)->waiters);)
   {
     struct lock_acquire_inst* curr = list_entry(e, struct lock_acquire_inst, holder_elem);
-    if (curr->lock == lock)
+    if (curr->lock == lock){
       list_remove(&curr->waiter_elem);
+      e = list_remove(e);
+    }
     else {
       if (new_priority > curr->waiter->priority)
         new_priority = curr->waiter->priority;
-      e = list_next(e)
+      e = list_next(e);
     }
   }
 
-  list_remove(&curr->holder_elem);
   lock->holder->priority = new_priority;
   update_priority(lock->holder, DONATE_MAXLVL - 1);
 

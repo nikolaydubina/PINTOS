@@ -1,14 +1,1 @@
-FAIL
-Kernel panic in run: PANIC at ../../lib/kernel/list.c:171 in list_insert(): assertion `is_interior (before) || is_tail (before)' failed.
-Call stack: 0xc0107476 0xc01077ce 0xc0107992 0xc01026b3 0xc0102981 0xc0102efb 0xc01032f5 0xc0108b13 0xc0100785 0xc0100036
-Translation of call stack:
-0xc0107476: debug_panic (.../../lib/kernel/debug.c:34)
-0xc01077ce: list_insert (.../../lib/kernel/list.c:172)
-0xc0107992: list_push_back (.../../lib/kernel/list.c:220)
-0xc01026b3: sema_down (.../../../threads/synch.c:73)
-0xc0102981: lock_acquire (...../../threads/synch.c:201)
-0xc0102efb: palloc_get_multiple (...../../threads/palloc.c:88)
-0xc01032f5: malloc (..../../threads/malloc.c:110)
-0xc0108b13: hash_init (..../../lib/kernel/hash.c:30)
-0xc0100785: thread_init (..../../threads/thread.c:120)
-0xc0100036: main (...d/../../threads/init.c:81)
+PASS

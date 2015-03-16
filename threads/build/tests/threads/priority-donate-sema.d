@@ -3,5 +3,4 @@ tests/threads/priority-donate-sema.o:  \
   ../../lib/debug.h ../../lib/stdarg.h ../../lib/stdbool.h \
   ../../lib/stddef.h ../../lib/stdint.h ../../lib/kernel/stdio.h \
   ../../tests/threads/tests.h ../../threads/init.h ../../threads/synch.h \
-  ../../lib/kernel/list.h ../../threads/thread.h ../../lib/kernel/hash.h \
-  ../../lib/kernel/list.h
+  ../../lib/kernel/list.h ../../threads/thread.h

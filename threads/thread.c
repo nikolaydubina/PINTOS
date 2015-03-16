@@ -96,7 +96,7 @@ thread_init (void)
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
-  initial_thread->tid = allocate_tid ();
+  initial_thread->tid = allocate_tid (); 
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -181,10 +181,6 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-
-  /* Initialize for priority donation */
-  list_init(&t->waiters);
-  list_init(&t->holders);
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -495,6 +491,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->set_priority = priority;
   t->magic = THREAD_MAGIC;
+
+  /* Initialize for priority donation */
+  list_init(&t->waiters);
+  list_init(&t->holders);
+
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -600,6 +601,7 @@ allocate_tid (void)
   static tid_t next_tid = 1;
   tid_t tid;
 
+//  printf("tid: %d next_tid: %d thread_id: %d\n", tid, next_tid, thread_current()->tid);
   lock_acquire (&tid_lock);
   tid = next_tid++;
   lock_release (&tid_lock);
