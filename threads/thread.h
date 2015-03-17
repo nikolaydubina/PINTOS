@@ -141,5 +141,6 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void update_priority(struct thread* cthread, int lvl);
+bool thread_less(const struct list_elem* a, const struct list_elem* b, void* aux);
 
 #endif /* threads/thread.h */

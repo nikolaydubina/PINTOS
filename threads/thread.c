@@ -66,12 +66,13 @@ static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
-bool thread_less(const struct list_elem* a, const struct list_elem* b, void* aux);
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void update_priority(struct thread* cthread, int lvl);
 void schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+
+bool thread_less(const struct list_elem* a, const struct list_elem* b, void* aux);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
