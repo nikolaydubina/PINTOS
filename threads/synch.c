@@ -198,7 +198,6 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  //enum intr_level old_level = intr_disable();
   /* scope of lock_acuire_inst is the same as
    * priority donation instance - "arrow" */
   struct lock_acquire_inst curr;
@@ -206,20 +205,22 @@ lock_acquire (struct lock *lock)
   curr.holder = lock->holder;
   curr.lock = lock;
 
-  if (lock->holder != NULL){
-    list_push_front(&(thread_current())->holders, &curr.holder_elem);
-    list_push_front(&(lock->holder)->waiters, &curr.waiter_elem);
-
-    update_priority(thread_current(), 0);
+  bool is_donating = curr.holder != NULL;
+  if (is_donating){
+    list_push_front(&curr.holder->waiters, &curr.waiter_elem);
+    list_push_front(&curr.waiter->holders, &curr.holder_elem);
+    update_priority(curr.waiter, 0);
   }
 
-  //intr_set_level(old_level);
   sema_down(&lock->semaphore);
+  lock->holder = curr.waiter;
 
-  //if (lock->holder != NULL)
-  //  update_priority(lock->holder, 0);
-
-  lock->holder = thread_current ();
+  /* here lock_acquire_inst should die
+   * de-link it from holder's and waite's queues */
+  if (is_donating){
+    list_remove(&curr.waiter_elem);
+    list_remove(&curr.holder_elem);
+  }
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -254,29 +255,28 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  //enum intr_level old_level = intr_disable();
-  int new_priority = lock->holder->set_priority;
-  struct list_elem* e;
-  for(e = list_begin(&(lock->holder)->waiters); e != list_end(&(lock->holder)->waiters);)
-  {
+  struct thread* holder = lock->holder;
+  int new_priority = holder->set_priority;
+
+  struct list_elem* e = list_begin(&holder->waiters);
+  while(e != list_end(&holder->waiters)){
     struct lock_acquire_inst* curr = list_entry(e, struct lock_acquire_inst, waiter_elem);
-    if (curr->lock == lock){
-      list_remove(&curr->waiter_elem);
-      e = list_remove(e);
+
+    if ((curr->waiter != NULL) && (curr->lock != lock) &&
+        (new_priority < curr->waiter->priority))
+    {
+      /* there is another priority donation */
+      new_priority = curr->waiter->priority;
     }
-    else {
-      if (new_priority < curr->waiter->priority)
-        new_priority = curr->waiter->priority;
-      e = list_next(e);
-    }
+    e = list_next(e);
   }
 
-  lock->holder->priority = new_priority;
-  //update_priority(lock->holder, 0);
-
+  holder->priority = new_priority;
   lock->holder = NULL;
+
   sema_up (&lock->semaphore);
-  //intr_set_level(old_level);
+
+  update_priority(holder, 0);
 }
 
 /* Returns true if the current thread holds LOCK, false
