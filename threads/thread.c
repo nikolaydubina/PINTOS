@@ -331,7 +331,6 @@ thread_yield (void)
 }
 
 static void update_priority_internal(struct thread* cthread, int lvl){
-  ASSERT(lvl >= 0);
   if (lvl < DONATE_MAXLVL && cthread != NULL){
     struct list_elem* e;
 
@@ -348,9 +347,7 @@ static void update_priority_internal(struct thread* cthread, int lvl){
   }
 }
 
-void  update_priority(struct thread* cthread){
-  update_priority_internal(cthread, 0);
-}
+void update_priority(struct thread* cthread){ update_priority_internal(cthread, 0); }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
