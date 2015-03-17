@@ -68,7 +68,7 @@ static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
-void update_priority(struct thread* cthread, int lvl);
+void update_priority(struct thread* cthread);
 void schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
@@ -330,7 +330,7 @@ thread_yield (void)
   intr_set_level (old_level);
 }
 
-void update_priority(struct thread* cthread, int lvl){
+static void update_priority_internal(struct thread* cthread, int lvl){
   ASSERT(lvl >= 0);
   if (lvl < DONATE_MAXLVL && cthread != NULL){
     struct list_elem* e;
@@ -342,12 +342,15 @@ void update_priority(struct thread* cthread, int lvl){
       
       if (cchild->priority < cthread->priority){
         cchild->priority = cthread->priority;
-        update_priority(cchild, lvl + 1);
+        update_priority_internal(cchild, lvl + 1);
       }
     }
   }
 }
 
+void  update_priority(struct thread* cthread){
+  update_priority_internal(cthread, 0);
+}
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
@@ -374,7 +377,7 @@ thread_set_priority (int new_priority)
   
   curr_thread->priority = max_priority; 
 
-  update_priority(curr_thread, 0);
+  update_priority(curr_thread);
   thread_yield();
 
   intr_set_level(old_level);

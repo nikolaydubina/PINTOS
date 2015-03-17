@@ -210,8 +210,8 @@ lock_acquire (struct lock *lock)
   if (is_donating){
     list_push_front(&curr.holder->waiters, &curr.waiter_elem);
     list_push_front(&curr.waiter->holders, &curr.holder_elem);
-    update_priority(curr.waiter, 0);
-    thread_yield();
+    update_priority(curr.waiter);
+    //thread_yield();
   }
 
   sema_down(&lock->semaphore);
@@ -277,9 +277,8 @@ lock_release (struct lock *lock)
   
   lock->holder = NULL;
 
+  update_priority(holder);
   sema_up(&lock->semaphore);
-
-  update_priority(holder, 0);
   thread_yield();
 }
 
