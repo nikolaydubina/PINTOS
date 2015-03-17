@@ -341,6 +341,10 @@ static void update_priority_internal(struct thread* cthread, int lvl){
       
       if (cchild->priority < cthread->priority){
         cchild->priority = cthread->priority;
+
+        if (cchild->sema_waiting_list != NULL)
+          list_sort(cchild->sema_waiting_list, thread_less, NULL);
+
         update_priority_internal(cchild, lvl + 1);
       }
     }
