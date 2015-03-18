@@ -73,6 +73,12 @@ void schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
 bool thread_less(const struct list_elem* a, const struct list_elem* b, void* aux);
+void update_priority(struct thread* cthread);
+static void update_priority_internal(struct thread* cthread, int lvl);
+
+/* updates priority of passed thread and all threads it donates priority
+ * and so fourth recursively */
+void update_priority(struct thread* cthread){ update_priority_internal(cthread, 0); }
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -324,7 +330,7 @@ thread_yield (void)
   old_level = intr_disable ();
 
   list_insert_ordered(&ready_list, &curr->elem, thread_less, NULL);
-  if (!list_issorted(&ready_list, thread_less));
+  if (!list_issorted(&ready_list, thread_less, NULL));
     list_sort(&ready_list, thread_less, NULL);
 
   curr->status = THREAD_READY;
@@ -332,6 +338,8 @@ thread_yield (void)
   intr_set_level (old_level);
 }
 
+/* checks whether there is any priority donation to passed thread
+ * upated priority of passed thread accordingly */
 static void check_waiters(struct thread* holder){
   struct list_elem* e = list_begin(&holder->waiters);
   int new_priority = holder->set_priority;
@@ -349,15 +357,12 @@ static void check_waiters(struct thread* holder){
   holder->priority = new_priority;
 }
 
+/* internal recursive part of function "update_priority" */
 static void update_priority_internal(struct thread* cthread, int lvl){
   if (lvl < DONATE_MAXLVL && cthread != NULL){
 
     /* update priority of this thread */
     check_waiters(cthread);
-
-    /* updating priority queue of waiting semaphore if any */
-    if (cthread->sema_waiting_list != NULL)
-      list_sort(cthread->sema_waiting_list, thread_less, NULL);
 
     /* updating priority of holders */
     struct list_elem* e;
@@ -367,8 +372,6 @@ static void update_priority_internal(struct thread* cthread, int lvl){
                                           holder_elem)->holder, lvl + 1);
   }
 }
-
-void update_priority(struct thread* cthread){ update_priority_internal(cthread, 0); }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
