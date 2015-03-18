@@ -69,13 +69,11 @@ sema_down (struct semaphore *sema)
 
   old_level = intr_disable ();
 
-  thread_current()->sema_waiting_list = &sema->waiters;
   while (sema->value == 0) 
     {
-      list_insert_ordered(&sema->waiters, &thread_current()->elem, thread_less, NULL);
+      list_push_back(&sema->waiters, &thread_current()->elem);
       thread_block ();
     }
-  thread_current()->sema_waiting_list = NULL;
   sema->value--;
   intr_set_level (old_level);
 }
@@ -119,10 +117,13 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
 
+  if (!list_empty(&sema->waiters)){
+    if(!list_issorted(&sema->waiters, thread_less, NULL))
+      list_sort(&sema->waiters, thread_less, NULL);
 
-  if (!list_empty (&sema->waiters))
     thread_unblock(list_entry(list_pop_front(&sema->waiters),
                               struct thread, elem));
+  }
   sema->value++;
   thread_yield();
   intr_set_level (old_level);
@@ -300,7 +301,7 @@ struct semaphore_elem
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
-    int priority;
+    struct thread* thread;              /* Thread in cond_wait. used to find max priority thread */
   };
 
 /* Initializes condition variable COND.  A condition variable
@@ -314,16 +315,20 @@ cond_init (struct condition *cond)
   list_init (&cond->waiters);
 }
 
+/* used to order semaphore_elem in condition waiting list */
 static bool semaphore_elem_less(const struct list_elem* a, const struct list_elem* b, void* aux){
   struct semaphore_elem* an = list_entry(a, struct semaphore_elem, elem);
   struct semaphore_elem* bn = list_entry(b, struct semaphore_elem, elem);
 
   bool ret;
 
-  ret = an->priority > bn->priority;
+  ASSERT(an->thread != NULL);
+  ASSERT(bn->thread != NULL);
+  ret = an->thread->priority > bn->thread->priority;
 
   return ret;
 }
+
 /* Atomically releases LOCK and waits for COND to be signaled by
    some other piece of code.  After COND is signaled, LOCK is
    reacquired before returning.  LOCK must be held before calling
@@ -349,7 +354,7 @@ cond_wait (struct condition *cond, struct lock *lock)
 {
   struct semaphore_elem waiter;
   enum intr_level old_level = intr_disable();
-  waiter.priority = thread_current()->priority;
+  waiter.thread = thread_current();
 
   ASSERT (cond != NULL);
   ASSERT (lock != NULL);
@@ -357,7 +362,7 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  list_insert_ordered(&cond->waiters, &waiter.elem, semaphore_elem_less, NULL);
+  list_push_back(&cond->waiters, &waiter.elem);
 
   lock_release (lock);
   intr_set_level(old_level);
@@ -381,8 +386,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   enum intr_level old_level = intr_disable();
-  if (!list_empty (&cond->waiters))
-    sema_up(&list_entry(list_pop_front(&cond->waiters), struct semaphore_elem, elem)->semaphore);
+  if (!list_empty (&cond->waiters)){
+    struct list_elem* e = list_min(&cond->waiters, semaphore_elem_less, NULL);
+    sema_up(&list_entry(e, struct semaphore_elem, elem)->semaphore);
+    list_remove(e);
+  }
   intr_set_level(old_level);
 }
 

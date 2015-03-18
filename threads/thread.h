@@ -97,7 +97,6 @@ struct thread
     struct list holders;                /* This thread is waiting for these threads */
 
     /* Shared between thread.c and synch.c. */
-    struct list* sema_waiting_list;      /* Used to get list of waiting thread in semaphore */
     struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
