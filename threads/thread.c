@@ -332,25 +332,6 @@ thread_yield (void)
   intr_set_level (old_level);
 }
 
-void check_waiters_priority(struct thread* holder, struct lock* lock){
-  struct list_elem* e = list_begin(&holder->waiters);
-  int new_priority = holder->set_priority;
-
-  while(e != list_end(&holder->waiters)){
-    struct lock_acquire_inst* curr = list_entry(e, struct lock_acquire_inst, waiter_elem);
-
-    if ((curr->waiter != NULL) && (curr->lock != lock) &&
-      (new_priority < curr->waiter->priority))
-    {
-      /* there is another priority donation */
-      new_priority = curr->waiter->priority;
-    }
-    e = list_next(e);
-  }
-
-  holder->priority = new_priority;
-}
-
 static void check_waiters(struct thread* holder){
   struct list_elem* e = list_begin(&holder->waiters);
   int new_priority = holder->set_priority;
@@ -358,11 +339,10 @@ static void check_waiters(struct thread* holder){
   while(e != list_end(&holder->waiters)){
     struct lock_acquire_inst* curr = list_entry(e, struct lock_acquire_inst, waiter_elem);
 
+    /* if there is a priority donation */
     if ((curr->waiter != NULL) && (new_priority < curr->waiter->priority))
-    {
-      /* there is another priority donation */
       new_priority = curr->waiter->priority;
-    }
+
     e = list_next(e);
   }
 
@@ -371,12 +351,15 @@ static void check_waiters(struct thread* holder){
 
 static void update_priority_internal(struct thread* cthread, int lvl){
   if (lvl < DONATE_MAXLVL && cthread != NULL){
+
+    /* update priority of this thread */
     check_waiters(cthread);
 
     /* updating priority queue of waiting semaphore if any */
     if (cthread->sema_waiting_list != NULL)
       list_sort(cthread->sema_waiting_list, thread_less, NULL);
 
+    /* updating priority of holders */
     struct list_elem* e;
     for(e = list_begin(&cthread->holders); e != list_end(&cthread->holders);
         e = list_next(e))
@@ -397,20 +380,8 @@ thread_set_priority (int new_priority)
   enum intr_level old_level = intr_disable();
 
   struct thread* curr_thread = thread_current();
-  curr_thread->set_priority = new_priority;
-
-  int max_priority = new_priority;
-  struct list_elem* e;
-  for(e = list_begin(&curr_thread->waiters);
-      e != list_end(&curr_thread->waiters);
-      e = list_next(e))
-  {
-    int curr_prp = list_entry(e, struct lock_acquire_inst, waiter_elem)->waiter->priority;
-    if (max_priority < curr_prp)
-      max_priority = curr_prp;
-  }
-  
-  curr_thread->priority = max_priority; 
+  curr_thread->set_priority = new_priority;     /* to restore when ther will be no waiters */
+  curr_thread->priority = new_priority;         /* will be updated in "update_priority" */
 
   update_priority(curr_thread);
   thread_yield();

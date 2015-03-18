@@ -261,7 +261,22 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  check_waiters_priority(lock->holder, lock);
+  struct thread* holder = lock->holder;
+  struct list_elem* e = list_begin(&holder->waiters);
+  int new_priority = holder->set_priority;
+
+  while(e != list_end(&holder->waiters)){
+    struct lock_acquire_inst* curr = list_entry(e, struct lock_acquire_inst, waiter_elem);
+
+    /* if there is ANOTHER priority donation */
+    if ((curr->waiter != NULL) && (curr->lock != lock) &&
+      (new_priority < curr->waiter->priority))
+      new_priority = curr->waiter->priority;
+
+    e = list_next(e);
+  }
+
+  holder->priority = new_priority;
   
   lock->holder = NULL;
   update_priority(lock->holder);
