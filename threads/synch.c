@@ -294,12 +294,13 @@ lock_held_by_current_thread (const struct lock *lock)
 
   return lock->holder == thread_current ();
 }
-
+
 /* One semaphore in a list. */
 struct semaphore_elem 
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
+    int priority;
   };
 
 /* Initializes condition variable COND.  A condition variable
@@ -313,6 +314,16 @@ cond_init (struct condition *cond)
   list_init (&cond->waiters);
 }
 
+static bool semaphore_elem_less(const struct list_elem* a, const struct list_elem* b, void* aux){
+  struct semaphore_elem* an = list_entry(a, struct semaphore_elem, elem);
+  struct semaphore_elem* bn = list_entry(b, struct semaphore_elem, elem);
+
+  bool ret;
+
+  ret = an->priority > bn->priority;
+
+  return ret;
+}
 /* Atomically releases LOCK and waits for COND to be signaled by
    some other piece of code.  After COND is signaled, LOCK is
    reacquired before returning.  LOCK must be held before calling
@@ -337,6 +348,8 @@ void
 cond_wait (struct condition *cond, struct lock *lock) 
 {
   struct semaphore_elem waiter;
+  enum intr_level old_level = intr_disable();
+  waiter.priority = thread_current()->priority;
 
   ASSERT (cond != NULL);
   ASSERT (lock != NULL);
@@ -344,9 +357,10 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-//  list_push_back (&cond->waiters, &waiter.elem);
-  list_insert_ordered(&cond->waiters, &waiter.elem, thread_less, NULL);
+  list_insert_ordered(&cond->waiters, &waiter.elem, semaphore_elem_less, NULL);
+
   lock_release (lock);
+  intr_set_level(old_level);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
 }
@@ -366,11 +380,10 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)){
-    struct list_elem* e = list_min(&cond->waiters, thread_less, NULL);
-    sema_up(&list_entry(e,struct semaphore_elem, elem)->semaphore);
-    list_remove(e);
-  }
+  enum intr_level old_level = intr_disable();
+  if (!list_empty (&cond->waiters))
+    sema_up(&list_entry(list_pop_front(&cond->waiters), struct semaphore_elem, elem)->semaphore);
+  intr_set_level(old_level);
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by

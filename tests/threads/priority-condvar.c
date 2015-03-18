@@ -45,9 +45,9 @@ test_priority_condvar (void)
 static void
 priority_condvar_thread (void *aux UNUSED) 
 {
-  msg ("Thread %s starting. %d", thread_name (), thread_current()->priority);
+  msg ("Thread %s starting.", thread_name ());
   lock_acquire (&lock);
   cond_wait (&condition, &lock);
-  msg ("Thread %s woke up. %d", thread_name (), thread_current()->priority);
+  msg ("Thread %s woke up.", thread_name ());
   lock_release (&lock);
 }
