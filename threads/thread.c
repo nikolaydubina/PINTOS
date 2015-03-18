@@ -322,32 +322,66 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
+
   list_insert_ordered(&ready_list, &curr->elem, thread_less, NULL);
   if (!list_issorted(&ready_list, thread_less));
     list_sort(&ready_list, thread_less, NULL);
+
   curr->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
 }
 
+void check_waiters_priority(struct thread* holder, struct lock* lock){
+  struct list_elem* e = list_begin(&holder->waiters);
+  int new_priority = holder->set_priority;
+
+  while(e != list_end(&holder->waiters)){
+    struct lock_acquire_inst* curr = list_entry(e, struct lock_acquire_inst, waiter_elem);
+
+    if ((curr->waiter != NULL) && (curr->lock != lock) &&
+      (new_priority < curr->waiter->priority))
+    {
+      /* there is another priority donation */
+      new_priority = curr->waiter->priority;
+    }
+    e = list_next(e);
+  }
+
+  holder->priority = new_priority;
+}
+
+static void check_waiters(struct thread* holder){
+  struct list_elem* e = list_begin(&holder->waiters);
+  int new_priority = holder->set_priority;
+
+  while(e != list_end(&holder->waiters)){
+    struct lock_acquire_inst* curr = list_entry(e, struct lock_acquire_inst, waiter_elem);
+
+    if ((curr->waiter != NULL) && (new_priority < curr->waiter->priority))
+    {
+      /* there is another priority donation */
+      new_priority = curr->waiter->priority;
+    }
+    e = list_next(e);
+  }
+
+  holder->priority = new_priority;
+}
+
 static void update_priority_internal(struct thread* cthread, int lvl){
   if (lvl < DONATE_MAXLVL && cthread != NULL){
-    struct list_elem* e;
+    check_waiters(cthread);
 
+    /* updating priority queue of waiting semaphore if any */
+    if (cthread->sema_waiting_list != NULL)
+      list_sort(cthread->sema_waiting_list, thread_less, NULL);
+
+    struct list_elem* e;
     for(e = list_begin(&cthread->holders); e != list_end(&cthread->holders);
         e = list_next(e))
-    {
-      struct thread* cchild = list_entry(e, struct lock_acquire_inst, holder_elem)->holder;
-      
-      if (cchild->priority < cthread->priority){
-        cchild->priority = cthread->priority;
-
-        if (cchild->sema_waiting_list != NULL)
-          list_sort(cchild->sema_waiting_list, thread_less, NULL);
-
-        update_priority_internal(cchild, lvl + 1);
-      }
-    }
+      update_priority_internal(list_entry(e, struct lock_acquire_inst, 
+                                          holder_elem)->holder, lvl + 1);
   }
 }
 
