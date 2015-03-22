@@ -134,13 +134,6 @@ hash_find (struct hash *h, struct hash_elem *e)
   return find_elem (h, find_bucket (h, e), e);
 }
 
-/* Returns a list of all elements equal to requested hash. */
-struct list* 
-hash_findall(struct hash* h, struct hash_elem* e)
-{
-    return find_bucket(h, e);
-}
-
 /* Finds, removes, and returns an element equal to E in hash
    table H.  Returns a null pointer if no equal element existed
    in the table.
