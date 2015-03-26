@@ -15,31 +15,63 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#define MAX_ARGC 100
+#define MAX_ARGSIZE 4000
+
+static struct args_descr{
+  int argc;
+  char **argv;
+};
+
 static thread_func start_process NO_RETURN;
-static bool load (const char *cmdline, void (**eip) (void), void **esp);
+typedef struct args_descr args_descr;
+static bool load (const char *cmdline, void (**eip) (void), void **esp, args_descr* args);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *raw_args) 
 {
   char *fn_copy;
   tid_t tid;
 
-  /* Make a copy of FILE_NAME.
+  /* Make a copy of raw_args.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_copy, raw_args, PGSIZE);
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  args_descr* args = malloc(sizeof(args_descr));
+  args->argc = 0;
+  args->argv = malloc(MAX_ARGC * sizeof(char*));
+
+  int size = sizeof(char**);  /* to limit size of arguments */
+  char *token, *save_ptr;
+  for (token = strtok_r(fn_copy, " ", &save_ptr);
+       token != NULL && args->argc <= MAX_ARGC;
+       token = strtok_r(NULL, " ", &save_ptr))
+  {
+    int len_token = strlen(token) + 1; /* FIXME */
+
+    if (size + len_token > MAX_ARGSIZE)
+      break;
+    else{
+      args->argv[args->argc] = malloc(len_token * sizeof(char));
+      strlcpy(args->argv[args->argc], token, len_token);
+      size += len_token + sizeof(char*);
+      args->argc++;
+    }
+  }
+
+  /* Create a new thread to execute raw_args. */
+  tid = thread_create (raw_args, PRI_DEFAULT, start_process, args);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -48,18 +80,26 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and makes it start
    running. */
 static void
-start_process (void *f_name)
+start_process (void *args_r)
 {
-  char *file_name = f_name;
+  args_descr* args = args_r;
+  char *file_name = args->argv[0];
   struct intr_frame if_;
   bool success;
+
+  /* debug */
+  int i = 0;
+  printf("%d\n", args->argc);
+  for(i = 0; i < args->argc; ++i)
+    printf("%s ", args->argv[i]);
+  printf("\n");
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (file_name, &if_.eip, &if_.esp, args);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -195,7 +235,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, args_descr* args);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -206,7 +246,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (const char *file_name, void (**eip) (void), void **esp, args_descr* args) 
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
@@ -302,7 +342,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, args))
     goto done;
 
   /* Start address. */
@@ -427,7 +467,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, args_descr* args) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -436,8 +476,19 @@ setup_stack (void **esp)
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
+      if (success){
+        /* TODO */
+        /* adding arguments at the top os stack */
+
+        /* cleaning arg_descr structure */
+        int i;
+        for(i = 0; i < args->argc; ++i)
+          free(args->argv[i]);
+        free(args->argv);
+        free(args);
+
         *esp = PHYS_BASE;
+      }
       else
         palloc_free_page (kpage);
     }
