@@ -13,8 +13,10 @@ syscall_init (void)
 }
 
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler (struct intr_frame *f) 
 {
   printf ("system call!\n");
+
+  printf("vec_no: %d\n", f->vec_no);
   thread_exit ();
 }
