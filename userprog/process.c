@@ -24,6 +24,7 @@
 
 static struct args_descr{
   int argc;
+  int size;
   char **argv;
 };
 
@@ -51,8 +52,8 @@ process_execute (const char *raw_args)
   args_descr* args = malloc(sizeof(args_descr));
   args->argc = 0;
   args->argv = malloc(MAX_ARGC * sizeof(char*));
+  args->size = sizeof(char**);  /* to limit size of arguments */
 
-  int size = sizeof(char**);  /* to limit size of arguments */
   char *token, *save_ptr;
   for (token = strtok_r(fn_copy, " ", &save_ptr);
        token != NULL && args->argc <= MAX_ARGC;
@@ -60,12 +61,12 @@ process_execute (const char *raw_args)
   {
     int len_token = strlen(token) + 1; /* FIXME */
 
-    if (size + len_token > MAX_ARGSIZE)
+    if (args->size + len_token > MAX_ARGSIZE)
       break;
     else{
       args->argv[args->argc] = malloc(len_token * sizeof(char));
       strlcpy(args->argv[args->argc], token, len_token);
-      size += len_token + sizeof(char*);
+      args->size += len_token + sizeof(char*);
       args->argc++;
     }
   }
@@ -86,13 +87,6 @@ start_process (void *args_r)
   char *file_name = args->argv[0];
   struct intr_frame if_;
   bool success;
-
-  /* debug */
-  int i = 0;
-  printf("%d\n", args->argc);
-  for(i = 0; i < args->argc; ++i)
-    printf("%s ", args->argv[i]);
-  printf("\n");
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -128,6 +122,10 @@ start_process (void *args_r)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  // FIXME!!!
+  int i  = 0;
+  while(true)
+    i = i * 1;
   return -1;
 }
 
@@ -263,12 +261,14 @@ load (const char *file_name, void (**eip) (void), void **esp, args_descr* args)
 
   /* Open executable file. */
   file = filesys_open (file_name);
+  printf("bang!\n");
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
 
+  printf("%s\n", file_name); // DEBU
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -477,17 +477,35 @@ setup_stack (void **esp, args_descr* args)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success){
-        /* TODO */
+        printf("%0x\n", PHYS_BASE);
+        printf("start initializing args\n================\n");
+
         /* adding arguments at the top os stack */
+        char* addr = (char*)PHYS_BASE;
+
+        int i;
+        for(i = args->argc - 1; i >= 0; --i){
+          int l = strlen(args->argv[i]) + 1;
+          addr -= l;
+          strlcpy(addr, args->argv[i], l);
+        }
+
+        //for(i = 0; i < args->argc; ++i){
+        //  from_top += strlen(args->argv[i]);
+        //  *((char*)PHYS_BASE - args->size - i * sizeof(char*)) = PHYS_BASE - from_top;
+        //}
+        //char* argv0 = PHYS_BASE - args->size - args->argc * sizeof(char*);
+        //*(argv0 - sizeof(char**)) = argv0;
+        //*(argv0 - sizeof(char**) - sizeof(int)) = args->argc;
 
         /* cleaning arg_descr structure */
-        int i;
         for(i = 0; i < args->argc; ++i)
           free(args->argv[i]);
         free(args->argv);
         free(args);
 
-        *esp = PHYS_BASE;
+        *esp = (char*)PHYS_BASE - 0 - sizeof(char**) - sizeof(int) - sizeof(void*);
+        hex_dump((uintptr_t) (PHYS_BASE - 200), (void **) (PHYS_BASE - 200), 200, true);
       }
       else
         palloc_free_page (kpage);
