@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # build
 cd ../../
@@ -9,4 +9,5 @@ cd filesys;   make; cd ../
 cd examples;  make; cd ../
 cd userprog/build
 
-pintos -v -k -T 60 --fs-disk=2 -p tests/userprog/$1 -a "$1" -- -f -q run "$1 $2 $3"
+# run
+pintos -v -k -T 60 --fs-disk=2 -p tests/userprog/$1 -a "$1" -- -f -q run "$*"
