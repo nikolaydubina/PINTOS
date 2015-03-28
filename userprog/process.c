@@ -94,8 +94,14 @@ start_process (void *args_r)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp, args);
 
+  /* cleaning arg_descr structure */
+  int i;
+  for(i = 0; i < args->argc; ++i)
+    free(args->argv[i]);
+  free(args->argv);
+  free(args);
+
   /* If load failed, quit. */
-  palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
 
@@ -481,7 +487,7 @@ setup_stack (void **esp, args_descr* args)
         for(i = args->argc - 1; i >= 0; --i){
           int l = strlen(args->argv[i]) + 1;
           addr -= l;
-          memcpy(addr, args->argv[i], l);
+          memcpy(addr, args->argv[i], l * sizeof(char));
         }
 
         /* alignment */
@@ -505,14 +511,8 @@ setup_stack (void **esp, args_descr* args)
         addr -= sizeof(char*);
         memcpy(addr, &zero, sizeof(char*));
 
-        /* cleaning arg_descr structure */
-        for(i = 0; i < args->argc; ++i)
-          free(args->argv[i]);
-        free(args->argv);
-        free(args);
-
         *esp = addr;
-        hex_dump((uintptr_t) (PHYS_BASE - 200), (void **) (PHYS_BASE - 200), 200, true);
+        //hex_dump((uintptr_t) (PHYS_BASE - 200), (void **) (PHYS_BASE - 200), 200, true);
       }
       else
         palloc_free_page (kpage);
