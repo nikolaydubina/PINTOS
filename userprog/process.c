@@ -24,7 +24,6 @@
 
 static struct args_descr{
   int argc;
-  int size;
   char **argv;
 };
 
@@ -52,7 +51,7 @@ process_execute (const char *raw_args)
   args_descr* args = malloc(sizeof(args_descr));
   args->argc = 0;
   args->argv = malloc(MAX_ARGC * sizeof(char*));
-  args->size = sizeof(char**);  /* to limit size of arguments */
+  int size = sizeof(char**);  /* to limit size of arguments */
 
   char *token, *save_ptr;
   for (token = strtok_r(fn_copy, " ", &save_ptr);
@@ -61,12 +60,12 @@ process_execute (const char *raw_args)
   {
     int len_token = strlen(token) + 1; /* FIXME */
 
-    if (args->size + len_token > MAX_ARGSIZE)
+    if (size + len_token > MAX_ARGSIZE)
       break;
     else{
       args->argv[args->argc] = malloc(len_token * sizeof(char));
       strlcpy(args->argv[args->argc], token, len_token);
-      args->size += len_token + sizeof(char*);
+      size += len_token + sizeof(char*);
       args->argc++;
     }
   }
@@ -261,14 +260,12 @@ load (const char *file_name, void (**eip) (void), void **esp, args_descr* args)
 
   /* Open executable file. */
   file = filesys_open (file_name);
-  printf("bang!\n");
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
 
-  printf("%s\n", file_name); // DEBU
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -477,26 +474,36 @@ setup_stack (void **esp, args_descr* args)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success){
-        printf("%0x\n", PHYS_BASE);
-        printf("start initializing args\n================\n");
-
-        /* adding arguments at the top os stack */
         char* addr = (char*)PHYS_BASE;
 
+        /* arguments values */
         int i;
         for(i = args->argc - 1; i >= 0; --i){
           int l = strlen(args->argv[i]) + 1;
           addr -= l;
-          strlcpy(addr, args->argv[i], l);
+          memcpy(addr, args->argv[i], l);
         }
 
-        //for(i = 0; i < args->argc; ++i){
-        //  from_top += strlen(args->argv[i]);
-        //  *((char*)PHYS_BASE - args->size - i * sizeof(char*)) = PHYS_BASE - from_top;
-        //}
-        //char* argv0 = PHYS_BASE - args->size - args->argc * sizeof(char*);
-        //*(argv0 - sizeof(char**)) = argv0;
-        //*(argv0 - sizeof(char**) - sizeof(int)) = args->argc;
+        /* alignment */
+        addr -= 4;
+        addr = (char*)((int)addr - ((int) addr % 4));
+
+        /* arguments addresses */
+        char* argv_addr = (char*)PHYS_BASE;
+        for(i = args->argc - 1; i >= 0 ; --i){
+          argv_addr -= strlen(args->argv[i]) + 1;
+          addr -= sizeof(char*);
+          memcpy(addr, &argv_addr, sizeof(char*));
+        }
+
+        /* pointer to array of args, argc, return addr */
+        int* arg0 = addr, zero = 0;
+        addr -= sizeof(char**);
+        memcpy(addr, &arg0, sizeof(char*));
+        addr -= sizeof(int);
+        memcpy(addr, &args->argc, sizeof(int));
+        addr -= sizeof(char*);
+        memcpy(addr, &zero, sizeof(char*));
 
         /* cleaning arg_descr structure */
         for(i = 0; i < args->argc; ++i)
@@ -504,7 +511,7 @@ setup_stack (void **esp, args_descr* args)
         free(args->argv);
         free(args);
 
-        *esp = (char*)PHYS_BASE - 0 - sizeof(char**) - sizeof(int) - sizeof(void*);
+        *esp = addr;
         hex_dump((uintptr_t) (PHYS_BASE - 200), (void **) (PHYS_BASE - 200), 200, true);
       }
       else
