@@ -9,4 +9,4 @@ cd filesys;   make; cd ../
 cd examples;  make; cd ../
 cd userprog/build
 
-pintos -v -k -T 60 --fs-disk=2 -p tests/userprog/$1 -a "$1" -- -f -q run "$1 $2"
+pintos -v -k -T 60 --fs-disk=2 -p tests/userprog/$1 -a "$1" -- -f -q run "$1 $2 $3"
