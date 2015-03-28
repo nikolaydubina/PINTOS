@@ -6,7 +6,7 @@ cd threads;   make; cd ../
 cd userprog;  make; cd ../
 cd vm;        make; cd ../
 cd filesys;   make; cd ../
+cd examples;  make; cd ../
 cd userprog/build
 
-# run test
-pintos -v -- -q run "$1 $2 $3 $4"
+pintos -v -k -T 60 --fs-disk=2 -p tests/userprog/$1 -a "$1" -- -f -q run "$1 $2"
