@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <kern/list.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -18,6 +19,7 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 #define MAX_ARGC 100
 #define MAX_ARGSIZE 4000
@@ -27,9 +29,26 @@ static struct args_descr{
   char **argv;
 };
 
+static struct process_descr{
+  int pid;
+  int parent_pid; 
+  int exit_status;
+  struct semaphore sema;
+  struct list_elem elem;
+};
+
 static thread_func start_process NO_RETURN;
 typedef struct args_descr args_descr;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, args_descr* args);
+
+struct list process_list;
+struct lock process_list_lock;
+
+/* called in init_thread */
+void init_process(void){
+  list_init(&process_list); 
+  lock_init(&process_list_lock);
+}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -74,6 +93,18 @@ process_execute (const char *raw_args)
   tid = thread_create (raw_args, PRI_DEFAULT, start_process, args);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  else{
+    /* add new element to process list */
+    lock_acquire(&process_list_lock);
+    struct process_descr* new_pr = malloc(sizeof(struct process_descr));
+    new_pr->pid = tid;
+    new_pr->parent_pid = thread_current()->pid;
+    new_pr->exit_status = 0;
+    sema_init(&new_pr->sema, 0);
+
+    list_push_back(&process_list, &new_pr->elem); // FIXME: CLEAN
+    lock_release(&process_list_lock);
+  }
   return tid;
 }
 
@@ -125,13 +156,36 @@ start_process (void *args_r)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  // FIXME!!!
-  int i  = 0;
-  while(true)
-    i = i * 1;
-  return -1;
+  struct list_elem* e;
+  struct process_descr* child_pr = NULL;
+
+  lock_acquire(&process_list_lock);
+  for(e = list_begin(&process_list); e != list_end(&process_list);
+      e = list_next(e))
+    {
+      struct process_descr* curr = list_entry(e, struct process_descr, elem);
+      if (curr->pid == child_tid)
+        child_pr = curr;
+    }
+  lock_release(&process_list_lock);
+
+  if ((child_pr == NULL) ||
+      (thread_current()->pid != child_pr->parent_pid))
+    return -1;
+  else{
+    sema_down(&child_pr->sema);
+
+    /* child is dead*/
+    int exit_status = child_pr->exit_status;
+
+    lock_acquire(&process_list_lock);
+    list_remove(&child_pr->elem);
+    lock_release(&process_list_lock);
+
+    return exit_status;
+  }
 }
 
 /* Free the current process's resources. */
