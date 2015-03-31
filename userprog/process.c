@@ -50,6 +50,22 @@ void init_process(void){
   lock_init(&process_list_lock);
 }
 
+void notify_parent(int pid, int status){
+  struct list_elem* e;
+
+  lock_acquire(&process_list_lock);
+  for(e = list_begin(&process_list); e != list_end(&process_list);
+      e = list_next(e))
+    {
+      struct process_descr* curr = list_entry(e, struct process_descr, elem);
+      if (curr->pid == pid){
+        curr->exit_status = status;
+        sema_up(&curr->sema);
+      }
+    }
+  lock_release(&process_list_lock);
+}
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -536,9 +552,10 @@ setup_stack (void **esp, args_descr* args)
       if (success){
         char* addr = (char*)PHYS_BASE;
 
+        int argc = args->argc;
         /* arguments values */
         int i;
-        for(i = args->argc - 1; i >= 0; --i){
+        for(i = argc - 1; i >= 0; --i){
           int l = strlen(args->argv[i]) + 1;
           addr -= l;
           memcpy(addr, args->argv[i], l * sizeof(char));
@@ -548,9 +565,15 @@ setup_stack (void **esp, args_descr* args)
         addr -= 4;
         addr = (char*)((int)addr - ((int) addr % 4));
 
+        /* adding null address */
+        void* null_addr = NULL;
+        addr -= sizeof(void*);
+        memcpy(addr, &null_addr, sizeof(void*));
+
+
         /* arguments addresses */
         char* argv_addr = (char*)PHYS_BASE;
-        for(i = args->argc - 1; i >= 0 ; --i){
+        for(i = argc - 1; i >= 0 ; --i){
           argv_addr -= strlen(args->argv[i]) + 1;
           addr -= sizeof(char*);
           memcpy(addr, &argv_addr, sizeof(char*));
@@ -561,7 +584,7 @@ setup_stack (void **esp, args_descr* args)
         addr -= sizeof(char**);
         memcpy(addr, &arg0, sizeof(char*));
         addr -= sizeof(int);
-        memcpy(addr, &args->argc, sizeof(int));
+        memcpy(addr, &argc, sizeof(int));
         addr -= sizeof(char*);
         memcpy(addr, &zero, sizeof(char*));
 

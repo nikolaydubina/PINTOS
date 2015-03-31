@@ -96,6 +96,7 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     uint64_t pid;                       /* ID of process it corresopnds to */
+    int exit_status;                    /* exit status of thread */
 #endif
 
     /* Owned by thread.c. */
