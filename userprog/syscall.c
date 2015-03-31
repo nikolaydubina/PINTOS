@@ -97,26 +97,26 @@ syscall_handler (struct intr_frame* f){
 
 /* Halt the operating system. */
 static void syscall_halt(struct intr_frame* f){
-  printf("syscall: halt\n");
+  //printf("syscall: halt\n");
   power_off();
   NOT_REACHED ();
 }
 
 /* Terminate this process. */
 static void syscall_exit(struct intr_frame* f){
-  printf("syscall: exit\n");
+  //printf("syscall: exit\n");
   int exit_status;
 
   memcpy(&exit_status, f->esp + 4, 4);
 
-  f->eax = exit_status;
-  /* TODO: notify parent for exit status */
+  thread_current()->exit_status = exit_status;
   thread_exit();
+  NOT_REACHED ();
 }
 
 /* Start another process. */
 static void syscall_exec(struct intr_frame* f){
-  printf("syscall: exec\n");
+  //printf("syscall: exec\n");
   // TODO: lock? check?
   char* cmd_line;
   memcpy(&cmd_line, f->esp + 4, 4);
@@ -132,7 +132,7 @@ static void syscall_exec(struct intr_frame* f){
 
 /* Wait for a child process to die. */
 static void syscall_wait(struct intr_frame* f){
-  printf("syscall: wait\n");
+  //printf("syscall: wait\n");
 
   int wpid;
   memcpy(&wpid, f->esp + 4, 4);
@@ -166,7 +166,7 @@ static void syscall_read(struct intr_frame* f){
 }
 
 static void syscall_write(struct intr_frame* f){
-  printf("syscall: write\n");
+  //printf("syscall: write\n");
   int fd;
   const char* buffer;
   unsigned size;

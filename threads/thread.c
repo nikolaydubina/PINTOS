@@ -284,7 +284,9 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  process_exit ();
+  struct thread* curr = thread_current();
+  notify_parent(curr->tid, curr->exit_status);
+  process_exit();
 #endif
 
   /* Just set our status to dying and schedule another process.

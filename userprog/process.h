@@ -9,5 +9,6 @@ void process_exit (void);
 void process_activate (void);
 
 void init_process(void);
+void notify_parent(int pid, int status);
 
 #endif /* userprog/process.h */
