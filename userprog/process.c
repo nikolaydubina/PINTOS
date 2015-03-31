@@ -106,7 +106,7 @@ process_execute (const char *raw_args)
   }
 
   /* Create a new thread to execute raw_args. */
-  tid = thread_create (raw_args, PRI_DEFAULT, start_process, args);
+  tid = thread_create (args->argv[0], PRI_DEFAULT, start_process, args);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   else{
@@ -174,6 +174,7 @@ start_process (void *args_r)
 int
 process_wait (tid_t child_tid) 
 {
+//  printf("process wait: %d\n", child_tid);
   struct list_elem* e;
   struct process_descr* child_pr = NULL;
 
@@ -201,7 +202,7 @@ process_wait (tid_t child_tid)
     free(child_pr);
     lock_release(&process_list_lock);
   
-    printf("process_wait returns with: %d\n", exit_status);
+//    printf("process_wait %d returns with: %d\n", child_tid, exit_status);
     return exit_status;
   }
 }

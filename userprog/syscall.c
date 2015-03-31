@@ -110,6 +110,7 @@ static void syscall_exit(struct intr_frame* f){
   memcpy(&exit_status, f->esp + 4, 4);
 
   thread_current()->exit_status = exit_status;
+  printf( "%s: exit(%d)\n", thread_name(), exit_status);
   thread_exit();
   NOT_REACHED ();
 }
@@ -132,8 +133,6 @@ static void syscall_exec(struct intr_frame* f){
 
 /* Wait for a child process to die. */
 static void syscall_wait(struct intr_frame* f){
-  //printf("syscall: wait\n");
-
   int wpid;
   memcpy(&wpid, f->esp + 4, 4);
 
