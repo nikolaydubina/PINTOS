@@ -200,7 +200,8 @@ process_wait (tid_t child_tid)
     list_remove(&child_pr->elem);
     free(child_pr);
     lock_release(&process_list_lock);
-
+  
+    printf("process_wait returns with: %d\n", exit_status);
     return exit_status;
   }
 }
