@@ -27,6 +27,10 @@ void syscall_init (void){
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+bool address_correct(void* addr){
+  return is_user_vaddr(addr);
+}
+
 static void
 syscall_handler (struct intr_frame* f){
   int syscall_num;
@@ -113,21 +117,28 @@ static void syscall_exit(struct intr_frame* f){
 /* Start another process. */
 static void syscall_exec(struct intr_frame* f){
   printf("syscall: exec\n");
-  // TODO
-
+  // TODO: lock? check?
+  char* cmd_line;
+  memcpy(&cmd_line, f->esp + 4, 4);
+  
+  if (address_correct(cmd_line)){
+    int new_pid;
+    new_pid = process_execute(cmd_line); // pid == tid
+    f->eax = new_pid;
+  }
+  else
+    f->eax = -1;
 }
 
 /* Wait for a child process to die. */
 static void syscall_wait(struct intr_frame* f){
   printf("syscall: wait\n");
 
-  pid_t wpid;
+  int wpid;
   memcpy(&wpid, f->esp + 4, 4);
 
   int ret = process_wait(wpid);
   f->eax = ret;
-
-  thread_exit();
 }
 
 /* Create a file. */
@@ -164,16 +175,20 @@ static void syscall_write(struct intr_frame* f){
   memcpy(&buffer, f->esp + 8, 4);
   memcpy(&size, f->esp + 12, 4);
 
-  if (is_user_vaddr(buffer)){
+  if (address_correct(buffer)){
     int asize =  size < 100 ? size : 100;
+
     if (fd == 1){
       putbuf(buffer, asize);
       f->eax = asize;
     }
     else{
       // TODO: write to file
+      void;
     }
   }
+  else
+    f->eax = -1;
 }
 
 /* Change position in a file. */
