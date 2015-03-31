@@ -198,6 +198,7 @@ process_wait (tid_t child_tid)
 
     lock_acquire(&process_list_lock);
     list_remove(&child_pr->elem);
+    free(child_pr);
     lock_release(&process_list_lock);
 
     return exit_status;
