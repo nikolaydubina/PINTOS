@@ -27,6 +27,8 @@
 static struct args_descr{
   int argc;
   char **argv;
+  bool loaded;
+  struct semaphore sema_loaded;
 };
 
 static struct process_descr{
@@ -105,8 +107,22 @@ process_execute (const char *raw_args)
     }
   }
 
+  sema_init(&args->sema_loaded,0);
+  args->loaded = false;
+
   /* Create a new thread to execute raw_args. */
   tid = thread_create (args->argv[0], PRI_DEFAULT, start_process, args);
+  sema_down(&args->sema_loaded);
+  if (!(args->loaded))
+    tid = TID_ERROR;
+
+  /* cleaning arg_descr structure */
+  int i;
+  for(i = 0; i < args->argc; ++i)
+    free(args->argv[i]);
+  free(args->argv);
+  free(args);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   else{
@@ -141,12 +157,10 @@ start_process (void *args_r)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp, args);
 
-  /* cleaning arg_descr structure */
-  int i;
-  for(i = 0; i < args->argc; ++i)
-    free(args->argv[i]);
-  free(args->argv);
-  free(args);
+  /* signaling to parent */
+  args->loaded = success;
+  sema_up(&args->sema_loaded);
+  thread_yield();
 
   /* If load failed, quit. */
   if (!success) 

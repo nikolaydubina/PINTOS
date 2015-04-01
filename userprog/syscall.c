@@ -120,7 +120,7 @@ static void syscall_exit(struct intr_frame* f){
   //printf("syscall: exit\n");
   int exit_status;
   
-  if (!(address_correct(f->esp + 4)))
+  if (!(correct_pointer(f->esp + 4)))
     safe_exit(-1);
 
   memcpy(&exit_status, f->esp + 4, 4);
@@ -132,11 +132,11 @@ static void syscall_exec(struct intr_frame* f){
   //printf("syscall: exec\n");
   // TODO: lock? check?
   char* cmd_line;
-  if (!(address_correct(f->esp + 4)))
+  if (!(correct_pointer(f->esp + 4)))
     safe_exit(-1);
   memcpy(&cmd_line, f->esp + 4, 4);
   
-  if (address_correct(cmd_line)){
+  if (correct_pointer(cmd_line)){
     int new_pid;
     new_pid = process_execute(cmd_line); // pid == tid
     f->eax = new_pid;
@@ -148,7 +148,7 @@ static void syscall_exec(struct intr_frame* f){
 /* Wait for a child process to die. */
 static void syscall_wait(struct intr_frame* f){
   int wpid;
-  if (!(address_correct(f->esp + 4)))
+  if (!(correct_pointer(f->esp + 4)))
     safe_exit(-1);
   memcpy(&wpid, f->esp + 4, 4);
 
@@ -186,9 +186,9 @@ static void syscall_write(struct intr_frame* f){
   const char* buffer;
   unsigned size;
 
-  if (!(address_correct(f->esp + 4) &&
-        address_correct(f->esp + 8) &&
-        address_correct(f->esp + 12)))
+  if (!(correct_pointer(f->esp + 4) &&
+        correct_pointer(f->esp + 8) &&
+        correct_pointer(f->esp + 12)))
     safe_exit(-1);
 
   memcpy(&fd, f->esp + 4, 4);
