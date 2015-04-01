@@ -6,6 +6,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 static void syscall_handler (struct intr_frame*);
 
@@ -23,8 +24,21 @@ static void syscall_seek(struct intr_frame*);
 static void syscall_tell(struct intr_frame*);
 static void syscall_close(struct intr_frame*);
 
+struct file_descr{
+  int fid;
+  tid_t pid;
+  struct file* file;
+  struct list_elem elem;
+};
+
+/* NOTE: process.c - load() uses filesys_open */
+struct list opened_files;
+struct lock opened_files_lock;
+
 void syscall_init (void){
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  list_init(&opened_files);
+  lock_init(&opened_files_lock);
 }
 
 bool address_correct(void* addr){
@@ -181,7 +195,48 @@ static void syscall_remove(struct intr_frame* f){
 
 /* Open a file. */
 static void syscall_open(struct intr_frame* f){
-  printf("syscall: open\n");
+  char* filename;
+
+  if (!(correct_pointer(f->esp + 4)))
+    safe_exit(-1);
+
+  memcpy(&filename, f->esp + 4, 4);
+
+  if (!(correct_pointer(filename) && filename != NULL))
+    safe_exit(-1);
+
+  /* searching for new id */
+  int new_fid = 2;
+  struct list_elem* e;
+  lock_acquire(&opened_files_lock);
+  for(e = list_begin(&opened_files);
+      e != list_end(&opened_files);
+      e = list_next(e))
+  {
+    struct file_descr* curr = list_entry(e, struct file_descr, elem);
+    if (curr->pid == thread_current()->pid){
+      if (new_fid < curr->fid)
+        new_fid = curr->fid + 1;
+    }
+  }
+
+  struct file_descr* newfile_descr = malloc(sizeof(struct file_descr));
+  newfile_descr->fid = new_fid;
+  newfile_descr->pid = thread_current()->pid;
+
+  struct file* new_file = filesys_open(filename);
+  if (new_file != NULL){
+    newfile_descr->file = new_file;
+
+    list_push_back(&opened_files, &newfile_descr->elem);
+
+    f->eax = newfile_descr->fid;
+  }
+  else{
+    f->eax = -1;
+    free(newfile_descr);
+  }
+  lock_release(&opened_files_lock);
 }
 
 /* Obtain a file's size. */
@@ -194,7 +249,6 @@ static void syscall_read(struct intr_frame* f){
 }
 
 static void syscall_write(struct intr_frame* f){
-  //printf("syscall: write\n");
   int fd;
   const char* buffer;
   unsigned size;

@@ -4,4 +4,4 @@ userprog/syscall.o: ../../userprog/syscall.c ../../userprog/syscall.h \
   ../../lib/kernel/stdio.h ../../lib/kernel/console.h \
   ../../lib/syscall-nr.h ../../threads/malloc.h ../../threads/interrupt.h \
   ../../threads/thread.h ../../lib/kernel/list.h ../../threads/vaddr.h \
-  ../../threads/loader.h
+  ../../threads/loader.h ../../threads/synch.h
