@@ -30,8 +30,8 @@ static struct args_descr{
 };
 
 static struct process_descr{
-  int pid;
-  int parent_pid; 
+  tid_t pid;
+  tid_t parent_pid; 
   int exit_status;
   struct semaphore sema;
   struct list_elem elem;
