@@ -130,13 +130,12 @@ static void syscall_exit(struct intr_frame* f){
 /* Start another process. */
 static void syscall_exec(struct intr_frame* f){
   //printf("syscall: exec\n");
-  // TODO: lock? check?
   char* cmd_line;
   if (!(correct_pointer(f->esp + 4)))
     safe_exit(-1);
   memcpy(&cmd_line, f->esp + 4, 4);
   
-  if (correct_pointer(cmd_line)){
+  if (correct_pointer(cmd_line) && cmd_line != NULL){
     int new_pid;
     new_pid = process_execute(cmd_line); // pid == tid
     f->eax = new_pid;
@@ -158,7 +157,21 @@ static void syscall_wait(struct intr_frame* f){
 
 /* Create a file. */
 static void syscall_create(struct intr_frame* f){
-  printf("syscall: create\n");
+  const char* file;
+  unsigned initial_size;
+
+  if (!(correct_pointer(f->esp + 4) &&
+        correct_pointer(f->esp + 8)))
+    safe_exit(-1);
+
+  memcpy(&file, f->esp + 4, 4);
+  memcpy(&initial_size, f->esp + 8, 4);
+
+  if (!(correct_pointer(file) && file != NULL))
+    safe_exit(-1);
+    
+  bool success = filesys_create(file, initial_size);
+  f->eax = success;
 }
 
 /* Delete a file. */

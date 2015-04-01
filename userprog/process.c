@@ -148,7 +148,7 @@ start_process (void *args_r)
   args_descr* args = args_r;
   char *file_name = args->argv[0];
   struct intr_frame if_;
-  bool success;
+  bool success = false;
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
