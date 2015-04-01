@@ -31,9 +31,22 @@ bool address_correct(void* addr){
   return is_user_vaddr(addr);
 }
 
+bool correct_pointer(void* p){
+  return is_user_vaddr(p) && (pagedir_get_page(thread_current()->pagedir, p) != NULL);
+}
+
+void safe_exit(int exit_status){
+  thread_current()->exit_status = exit_status;
+  printf( "%s: exit(%d)\n", thread_name(), exit_status);
+  thread_exit();
+}
+
 static void
 syscall_handler (struct intr_frame* f){
   int syscall_num;
+
+  if (!correct_pointer(f->esp))
+    safe_exit(-1);
 
   memcpy(&syscall_num, f->esp, 4);
 
@@ -106,13 +119,12 @@ static void syscall_halt(struct intr_frame* f){
 static void syscall_exit(struct intr_frame* f){
   //printf("syscall: exit\n");
   int exit_status;
+  
+  if (!(address_correct(f->esp + 4)))
+    safe_exit(-1);
 
   memcpy(&exit_status, f->esp + 4, 4);
-
-  thread_current()->exit_status = exit_status;
-  printf( "%s: exit(%d)\n", thread_name(), exit_status);
-  thread_exit();
-  NOT_REACHED ();
+  safe_exit(exit_status);
 }
 
 /* Start another process. */
@@ -120,6 +132,8 @@ static void syscall_exec(struct intr_frame* f){
   //printf("syscall: exec\n");
   // TODO: lock? check?
   char* cmd_line;
+  if (!(address_correct(f->esp + 4)))
+    safe_exit(-1);
   memcpy(&cmd_line, f->esp + 4, 4);
   
   if (address_correct(cmd_line)){
@@ -128,12 +142,14 @@ static void syscall_exec(struct intr_frame* f){
     f->eax = new_pid;
   }
   else
-    f->eax = -1;
+    safe_exit(-1);
 }
 
 /* Wait for a child process to die. */
 static void syscall_wait(struct intr_frame* f){
   int wpid;
+  if (!(address_correct(f->esp + 4)))
+    safe_exit(-1);
   memcpy(&wpid, f->esp + 4, 4);
 
   int ret = process_wait(wpid);
@@ -170,24 +186,28 @@ static void syscall_write(struct intr_frame* f){
   const char* buffer;
   unsigned size;
 
+  if (!(address_correct(f->esp + 4) &&
+        address_correct(f->esp + 8) &&
+        address_correct(f->esp + 12)))
+    safe_exit(-1);
+
   memcpy(&fd, f->esp + 4, 4);
   memcpy(&buffer, f->esp + 8, 4);
   memcpy(&size, f->esp + 12, 4);
 
-  if (address_correct(buffer)){
-    int asize =  size < 100 ? size : 100;
+  if (!(address_correct(buffer)))
+    safe_exit(-1);
+    
+  int asize =  size < 100 ? size : 100;
 
-    if (fd == 1){
-      putbuf(buffer, asize);
-      f->eax = asize;
-    }
-    else{
-      // TODO: write to file
-      void;
-    }
+  if (fd == 1){
+    putbuf(buffer, asize);
+    f->eax = asize;
   }
-  else
-    f->eax = -1;
+  else{
+    // TODO: write to file
+    void;
+  }
 }
 
 /* Change position in a file. */
