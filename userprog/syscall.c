@@ -41,10 +41,6 @@ void syscall_init (void){
   lock_init(&opened_files_lock);
 }
 
-bool address_correct(void* addr){
-  return is_user_vaddr(addr);
-}
-
 bool correct_pointer(void* p){
   return is_user_vaddr(p) && (pagedir_get_page(thread_current()->pagedir, p) != NULL);
 }
@@ -241,15 +237,95 @@ static void syscall_open(struct intr_frame* f){
 
 /* Obtain a file's size. */
 static void syscall_filesize(struct intr_frame* f){
-  printf("syscall: filesize\n");
+//  printf("syscall: filesize\n");
+  int fid;
+
+  if (!(correct_pointer(f->esp + 4)))
+    safe_exit(-1);
+
+  memcpy(&fid, f->esp + 4, 4);
+
+  if (fid == 0 || fid == 1)
+    safe_exit(-1);
+
+  struct list_elem* e;
+  struct file_descr* fdescr = NULL;
+  lock_acquire(&opened_files_lock);
+  for(e = list_begin(&opened_files);
+      e != list_end(&opened_files);
+      e = list_next(e))
+  {
+    struct file_descr* curr = list_entry(e, struct file_descr, elem);
+    if (curr->fid == fid && thread_current()->pid == curr->pid){
+      fdescr = curr;
+    }
+  }
+
+  if (fdescr != NULL)
+    f->eax = file_length(&fdescr->file);
+  else
+    f->eax = -1;
+
+  lock_release(&opened_files_lock);
 }
 
 static void syscall_read(struct intr_frame* f){
-  printf("syscall: read\n");
+  //printf("syscall: read\n");
+  int fid;
+  char* buffer;
+  unsigned size;
+
+  if (!(correct_pointer(f->esp + 4) &&
+        correct_pointer(f->esp + 8) &&
+        correct_pointer(f->esp + 12)))
+    safe_exit(-1);
+
+  memcpy(&fid, f->esp + 4, 4);
+  memcpy(&buffer, f->esp + 8, 4);
+  memcpy(&size, f->esp + 12, 4);
+
+  if (!(correct_pointer(buffer) && buffer != NULL))
+    safe_exit(-1);
+    
+  int asize =  size < 10000000 ? size : 10000000;
+
+  if (fid == 1)
+    safe_exit(-1);
+
+  if (fid == 0){
+    int i;
+    for(i = 0; i < asize; ++i)
+      buffer[i] = input_getc();
+    if (i == asize)
+      f->eax = asize;
+    else
+      f->eax = -1;
+  }
+  else{
+    struct list_elem* e;
+    struct file_descr* fdescr = NULL;
+    lock_acquire(&opened_files_lock);
+    for(e = list_begin(&opened_files);
+        e != list_end(&opened_files);
+        e = list_next(e))
+    {
+      struct file_descr* curr = list_entry(e, struct file_descr, elem);
+      if (curr->fid == fid && thread_current()->pid == curr->pid){
+        fdescr = curr;
+      }
+    }
+
+    if (fdescr != NULL)
+      f->eax = file_read(&fdescr->file, buffer, asize);
+    else
+      f->eax = -1;
+
+    lock_release(&opened_files_lock);
+  }
 }
 
 static void syscall_write(struct intr_frame* f){
-  int fd;
+  int fid;
   const char* buffer;
   unsigned size;
 
@@ -258,37 +334,119 @@ static void syscall_write(struct intr_frame* f){
         correct_pointer(f->esp + 12)))
     safe_exit(-1);
 
-  memcpy(&fd, f->esp + 4, 4);
+  memcpy(&fid, f->esp + 4, 4);
   memcpy(&buffer, f->esp + 8, 4);
   memcpy(&size, f->esp + 12, 4);
 
-  if (!(address_correct(buffer)))
+  if (!(correct_pointer(buffer) && buffer != NULL))
     safe_exit(-1);
-    
+   
+  if (fid == 0)
+    safe_exit(-1);
+
   int asize =  size < 100 ? size : 100;
 
-  if (fd == 1){
+  if (fid == 1){
     putbuf(buffer, asize);
     f->eax = asize;
   }
   else{
-    // TODO: write to file
-    void;
+    struct list_elem* e;
+    struct file_descr* fdescr = NULL;
+    lock_acquire(&opened_files_lock);
+    for(e = list_begin(&opened_files);
+        e != list_end(&opened_files);
+        e = list_next(e))
+    {
+      struct file_descr* curr = list_entry(e, struct file_descr, elem);
+      if (curr->fid == fid && thread_current()->pid == curr->pid){
+        fdescr = curr;
+      }
+    }
+
+    if (fdescr != NULL)
+      f->eax = file_write(&fdescr->file, buffer, asize);
+    else
+      f->eax = -1;
+
+    lock_release(&opened_files_lock);
   }
 }
 
 /* Change position in a file. */
 static void syscall_seek(struct intr_frame* f){
-  printf("syscall: seek\n");
+  //printf("syscall: seek\n");
+  int fid;
+  unsigned position;
+
+  if (!(correct_pointer(f->esp + 4) &&
+        correct_pointer(f->esp + 8)))
+    safe_exit(-1);
+
+  memcpy(&fid, f->esp + 4, 4);
+  memcpy(&position, f->esp + 8, 4);
+
+  if (fid == 0 || fid == 1)
+    safe_exit(-1);
+
+  struct list_elem* e;
+  struct file_descr* fdescr = NULL;
+  lock_acquire(&opened_files_lock);
+  for(e = list_begin(&opened_files);
+      e != list_end(&opened_files);
+      e = list_next(e))
+  {
+    struct file_descr* curr = list_entry(e, struct file_descr, elem);
+    if (curr->fid == fid && thread_current()->pid == curr->pid){
+      fdescr = curr;
+    }
+  }
+
+  if (fdescr != NULL)
+    f->eax = file_seek(&fdescr->file, position);
+  else
+    f->eax = -1;
+
+  lock_release(&opened_files_lock);
 }
 
 /* Report current position in a file. */
 static void syscall_tell(struct intr_frame* f){
-  printf("syscall: tell\n");
+  //printf("syscall: tell\n");
+  int fid;
+
+  if (!(correct_pointer(f->esp + 4)))
+    safe_exit(-1);
+
+  memcpy(&fid, f->esp + 4, 4);
+
+  if (fid == 0 || fid == 1)
+    safe_exit(-1);
+
+  struct list_elem* e;
+  struct file_descr* fdescr = NULL;
+  lock_acquire(&opened_files_lock);
+  for(e = list_begin(&opened_files);
+      e != list_end(&opened_files);
+      e = list_next(e))
+  {
+    struct file_descr* curr = list_entry(e, struct file_descr, elem);
+    if (curr->fid == fid && thread_current()->pid == curr->pid){
+      fdescr = curr;
+    }
+  }
+
+  if (fdescr != NULL)
+    f->eax = file_tell(&fdescr->file);
+  else
+    f->eax = -1;
+
+  lock_release(&opened_files_lock);
 }
 
 /* Close a file. */
 static void syscall_close(struct intr_frame* f){
-  printf("syscall: close\n");
+//  printf("syscall: close\n");
+   
 }
 
