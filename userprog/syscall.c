@@ -155,7 +155,6 @@ static void syscall_exit(struct intr_frame* f){
 
 /* Start another process. */
 static void syscall_exec(struct intr_frame* f){
-  //printf("syscall: exec\n");
   char* cmd_line;
 
   if (!(correct_pointer(f->esp + 4)))
@@ -163,13 +162,17 @@ static void syscall_exec(struct intr_frame* f){
 
   memcpy(&cmd_line, f->esp + 4, 4);
   
-  if (correct_pointer(cmd_line) && cmd_line != NULL){
-    int new_pid;
-    new_pid = process_execute(cmd_line); // pid == tid
-    f->eax = new_pid;
+  if (!(correct_pointer(cmd_line) && cmd_line != NULL)){
+    f->eax = -1;
+    return;
   }
+
+  int new_pid;
+  new_pid = process_execute(cmd_line); // pid == tid
+  if (new_pid == TID_ERROR)
+    f->eax = -1;
   else
-    safe_exit(-1);
+    f->eax = new_pid;
 }
 
 /* Wait for a child process to die. */
@@ -344,7 +347,8 @@ static void syscall_write(struct intr_frame* f){
 
     if (fdescr == NULL){
       lock_release(&opened_files_lock);
-      safe_exit(-1);
+      f->eax = -1;
+      return;
     }
 
     f->eax = file_write(fdescr->file, buffer, asize);
@@ -418,8 +422,10 @@ static void syscall_close(struct intr_frame* f){
 
   memcpy(&fid, f->esp + 4, 4);
 
-  if (fid == 0 || fid == 1)
-    safe_exit(-1);
+  if (fid == 0 || fid == 1){
+    f->eax = -1;
+    return;
+  }
 
   lock_acquire(&opened_files_lock);
   struct file_descr* fdescr = lookup_file(fid);
