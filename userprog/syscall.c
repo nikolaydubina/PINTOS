@@ -223,7 +223,29 @@ static void syscall_create(struct intr_frame* f){
 
 /* Delete a file. */
 static void syscall_remove(struct intr_frame* f){
-  printf("syscall: remove\n");
+  const char* filename;
+
+  if (!(correct_pointer(f->esp) &&
+        correct_pointer(f->esp + 4)))
+    safe_exit(-1);
+
+  memcpy(&filename, f->esp + 4, 4);
+
+  if (!(correct_pointer(filename) && filename != NULL))
+    safe_exit(-1);
+
+  lock_acquire(&opened_files_lock);
+
+  struct file* rm_file = filesys_open(filename);
+  if (rm_file == NULL){
+    lock_release(&opened_files_lock);
+    f->eax = -1;
+    return;
+  }
+
+  inode_remove(file_get_inode(rm_file));
+
+  lock_release(&opened_files_lock);
 }
 
 /* Open a file. */
