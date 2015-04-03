@@ -442,7 +442,13 @@ load (const char *file_name, void (**eip) (void), void **esp, args_descr* args)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  if (!success)
+    file_close (file);
+  else{
+    thread_current()->exec_file = file;
+    file_deny_write(file);
+  }
+
   return success;
 }
 

@@ -137,9 +137,17 @@ static void syscall_exit(struct intr_frame* f){
 
   memcpy(&exit_status, f->esp + 4, 4);
 
+  lock_acquire(&opened_files_lock);
+
+  /* allowing write to executable */
+  struct file* exec_file = thread_current()->exec_file;
+  if (exec_file != NULL){
+    file_allow_write(exec_file);
+    file_close(exec_file);
+  }
+
   /* closing files */
   struct list_elem* e;
-  lock_acquire(&opened_files_lock);
   for(e = list_begin(&opened_files);
       e != list_end(&opened_files);
       e = list_next(e))

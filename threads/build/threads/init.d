@@ -8,4 +8,5 @@ threads/init.o: ../../threads/init.c ../../threads/init.h \
   ../../threads/interrupt.h ../../threads/io.h ../../threads/loader.h \
   ../../threads/malloc.h ../../threads/palloc.h ../../threads/pte.h \
   ../../threads/vaddr.h ../../threads/thread.h ../../lib/kernel/list.h \
+  ../../filesys/filesys.h ../../filesys/off_t.h \
   ../../tests/threads/tests.h
