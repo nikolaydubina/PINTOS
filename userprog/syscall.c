@@ -373,7 +373,7 @@ static void syscall_write(struct intr_frame* f){
   if (fid == 0)
     safe_exit(-1);
 
-  int asize =  size < 10000 ? size : 10000;
+  int asize =  size < 10000000 ? size : 10000000;
 
   if (fid == 1){
     lock_acquire(&opened_files_lock);
@@ -496,7 +496,7 @@ static struct file_descr* lookup_file(int fid){
       e = list_next(e))
   {
     struct file_descr* curr = list_entry(e, struct file_descr, elem);
-    if (curr->fid == fid && thread_current()->pid == curr->pid){
+    if ((curr->fid == fid) && (thread_current()->pid == curr->pid)){
       fdescr = curr;
     }
   }
