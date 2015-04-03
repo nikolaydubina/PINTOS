@@ -134,7 +134,7 @@ process_execute (const char *raw_args)
     new_pr->exit_status = 0;
     sema_init(&new_pr->sema, 0);
 
-    list_push_back(&process_list, &new_pr->elem); // FIXME: CLEAN
+    list_push_back(&process_list, &new_pr->elem);
     lock_release(&process_list_lock);
   }
   return tid;
@@ -188,7 +188,6 @@ start_process (void *args_r)
 int
 process_wait (tid_t child_tid) 
 {
-//  printf("process wait: %d\n", child_tid);
   struct list_elem* e;
   struct process_descr* child_pr = NULL;
 
