@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "filesys/filesys.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -97,6 +98,7 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     tid_t pid;                       /* ID of process it corresopnds to */
     int exit_status;                    /* exit status of thread */
+    struct file* exec_file;
 #endif
 
     /* Owned by thread.c. */
