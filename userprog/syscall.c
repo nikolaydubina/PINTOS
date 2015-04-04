@@ -153,7 +153,7 @@ static void syscall_exit(struct intr_frame* f){
       e = list_next(e))
   {
     struct file_descr* curr = list_entry(e, struct file_descr, elem);
-    if (thread_current()->pid == curr->pid)
+    if (thread_current()->tid == curr->pid)
       file_close(curr->file);
   }
   lock_release(&opened_files_lock);
@@ -273,7 +273,7 @@ static void syscall_open(struct intr_frame* f){
   else{
     struct file_descr* newfile_descr = malloc(sizeof(struct file_descr));
     newfile_descr->fid = new_fid;
-    newfile_descr->pid = thread_current()->pid;
+    newfile_descr->pid = thread_current()->tid;
     newfile_descr->file = new_file;
     list_push_back(&opened_files, &newfile_descr->elem);
     f->eax = newfile_descr->fid;
@@ -496,7 +496,7 @@ static struct file_descr* lookup_file(int fid){
       e = list_next(e))
   {
     struct file_descr* curr = list_entry(e, struct file_descr, elem);
-    if ((curr->fid == fid) && (thread_current()->pid == curr->pid)){
+    if ((curr->fid == fid) && (thread_current()->tid == curr->pid)){
       fdescr = curr;
     }
   }
