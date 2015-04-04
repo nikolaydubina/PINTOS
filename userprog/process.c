@@ -130,7 +130,7 @@ process_execute (const char *raw_args)
     lock_acquire(&process_list_lock);
     struct process_descr* new_pr = malloc(sizeof(struct process_descr));
     new_pr->pid = tid;
-    new_pr->parent_pid = thread_current()->pid;
+    new_pr->parent_pid = thread_current()->tid;
     new_pr->exit_status = 0;
     sema_init(&new_pr->sema, 0);
 
@@ -202,7 +202,7 @@ process_wait (tid_t child_tid)
   lock_release(&process_list_lock);
 
   if ((child_pr == NULL) ||
-      (thread_current()->pid != child_pr->parent_pid))
+      (thread_current()->tid != child_pr->parent_pid))
     return -1;
   else{
     sema_down(&child_pr->sema);
@@ -591,7 +591,6 @@ setup_stack (void **esp, args_descr* args)
         void* null_addr = NULL;
         addr -= sizeof(void*);
         memcpy(addr, &null_addr, sizeof(void*));
-
 
         /* arguments addresses */
         char* argv_addr = (char*)PHYS_BASE;

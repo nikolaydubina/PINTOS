@@ -447,7 +447,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   t->exit_status = -1;
-  t->pid = -1;
   t->exec_file = NULL;
 }
 
