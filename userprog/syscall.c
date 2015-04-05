@@ -25,7 +25,6 @@ static void syscall_tell(struct intr_frame*);
 static void syscall_close(struct intr_frame*);
 
 static struct file_descr* lookup_file(int fid);
-static void safe_exit(int exit_status);
 
 struct file_descr{
   int fid;
@@ -48,7 +47,7 @@ bool correct_pointer(void* p){
   return is_user_vaddr(p) && (pagedir_get_page(thread_current()->pagedir, p) != NULL);
 }
 
-static void safe_exit(int exit_status){
+void safe_exit(int exit_status){
   thread_current()->exit_status = exit_status;
   printf( "%s: exit(%d)\n", thread_name(), exit_status);
   thread_exit();
@@ -149,12 +148,15 @@ static void syscall_exit(struct intr_frame* f){
   /* closing files */
   struct list_elem* e;
   for(e = list_begin(&opened_files);
-      e != list_end(&opened_files);
-      e = list_next(e))
+      e != list_end(&opened_files);)
   {
     struct file_descr* curr = list_entry(e, struct file_descr, elem);
-    if (thread_current()->tid == curr->pid)
+    if (thread_current()->tid == curr->pid){
       file_close(curr->file);
+      e = list_remove(e);
+    }
+    else
+      e = list_next(e);
   }
   lock_release(&opened_files_lock);
 
