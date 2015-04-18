@@ -567,7 +567,7 @@ setup_stack (void **esp, args_descr* args)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  kpage = frame_create(PAL_USER | PAL_ZERO, NULL);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
@@ -613,7 +613,7 @@ setup_stack (void **esp, args_descr* args)
         //hex_dump((uintptr_t) (PHYS_BASE - 200), (void **) (PHYS_BASE - 200), 200, true);
       }
       else
-        palloc_free_page (kpage);
+        frame_free(kpage);
     }
   return success;
 }

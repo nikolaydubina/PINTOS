@@ -25,7 +25,7 @@ static bool frame_less(const struct hash_elem *a_, const struct hash_elem *b_, v
 }
 
 /* initializes internal structures */
-void frame_table_init(){
+void frame_init(){
   lock_init(&frame_table_lock);
   hash_init(&frame_table, frame_hash, frame_less, NULL);
 }
@@ -41,9 +41,8 @@ static struct frame* frame_lookup(const void *address){
   return e != NULL ? hash_entry(e, struct frame, hash_elem) : NULL;
 }
 
-/* allocate new frame slot */
-void* frame_alloc(enum palloc_flags flags, struct page* page){
-  lock_acquire(&frame_table_lock);
+/* create new frame slot */
+void* frame_create(enum palloc_flags flags, struct page* page){
 
   if ((flags & PAL_USER) == 0)
     return NULL;
@@ -66,7 +65,6 @@ void* frame_alloc(enum palloc_flags flags, struct page* page){
     frame_insert(addr, page);
   }
 
-  lock_release(&frame_table_lock);
   return addr;
 }
 
