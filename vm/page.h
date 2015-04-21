@@ -15,13 +15,17 @@
 
 struct page{
   void* vaddr;
-  void* paddr;
 
   struct hash_elem hash_elem;
 };
 
 void page_init(void);
-void* page_get(enum palloc_flags flags);
+void* page_allocate(enum palloc_flags flags);
+struct page* page_get(void* addr);
 void page_free(void* addr);
+
+struct hash* get_page_table(tid_t pid);
+struct hash* create_page_table(tid_t pid);
+struct hash* remove_page_table(tid_t pid);
 
 #endif // VM_PAGE
