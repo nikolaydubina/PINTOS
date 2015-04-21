@@ -151,7 +151,7 @@ start_process (void *args_r)
   bool success = false;
 
   /* initialize page table */
-  create_page_table(thread_current()->tid);
+  page_construct();
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -248,7 +248,7 @@ process_exit (void)
     }
 
   /* removing page table */
-  remove_page_table(curr->tid);
+  page_desctruct();
 }
 
 /* Sets up the CPU for running user code in the current

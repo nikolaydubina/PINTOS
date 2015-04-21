@@ -15,17 +15,23 @@
 
 struct page{
   void* vaddr;
-
   struct hash_elem hash_elem;
 };
 
+struct page_table{
+  struct thread* thread;
+  struct hash table;
+};
+
 void page_init(void);
+
+void page_construct(void);
+void page_destruct(void);
+
 void* page_allocate(enum palloc_flags flags);
 struct page* page_get(void* addr);
 void page_free(void* addr);
 
-struct hash* get_page_table(tid_t pid);
-struct hash* create_page_table(tid_t pid);
-struct hash* remove_page_table(tid_t pid);
+void grow_stack(void* vaddr);
 
 #endif // VM_PAGE
