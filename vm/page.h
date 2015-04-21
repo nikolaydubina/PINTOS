@@ -11,11 +11,11 @@
 #include "threads/thread.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
+#include "vm/frame.h"
 
 struct page{
-  void* addr;
-  tid_t tid;
-  struct thread* thread;
+  void* vaddr;
+  void* paddr;
 
   struct hash_elem hash_elem;
 };
