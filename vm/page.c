@@ -12,9 +12,9 @@ static struct lock page_table_list_lock;
 static struct list page_table_list; 
 
 /* pid -> page_table mapping */
-static struct hash* get_page_table(tid_t pid);
-static struct hash* create_page_table(tid_t pid);
-static struct hash* remove_page_table(tid_t pid);
+struct hash* get_page_table(tid_t pid);
+struct hash* create_page_table(tid_t pid);
+struct hash* remove_page_table(tid_t pid);
 
 /* helper routines */
 static struct page* page_lookup(struct hash* page_table, const void *address);
@@ -28,23 +28,30 @@ void page_init(void){
   list_init(&page_table_list);
 }
 
-void* page_get(enum palloc_flags flags){
+void* page_allocate(enum palloc_flags flags){
   tid_t curr_pid = thread_current()->tid;
 
   struct hash* curr_table = get_page_table(curr_pid);
-  if (curr_table == NULL)
-    curr_table = create_page_table(curr_pid);
 
   if (curr_table == NULL)
-    return;
+    return NULL;
   
   struct page* new_page = malloc(sizeof(struct page));
-  new_page->paddr = frame_create(flags, new_page); // flags == PAL_USER
-  new_page->vaddr = new_page->paddr;  // FIXME: vaddr = ?
+  new_page->vaddr = frame_create(flags, new_page); // flags == PAL_USER
   
   hash_insert(curr_table, &new_page->hash_elem);
 
   return new_page->vaddr;
+}
+
+struct page* page_get(void* vaddr){
+  tid_t curr_pid = thread_current()->tid;
+
+  struct page* ret = NULL;
+  struct hash* curr_table = get_page_table(curr_pid);
+  if (curr_table != NULL)
+    ret = page_lookup(curr_table, vaddr);
+  return ret;
 }
 
 void page_free(void* vaddr){
@@ -54,12 +61,12 @@ void page_free(void* vaddr){
   if (curr_table != NULL){
     struct page* curr_page = page_lookup(curr_table, vaddr);
     if (curr_page != NULL)
-      frame_free(curr_page->paddr);
+      frame_free(curr_page->vaddr);
   }
 }
 
 /* list of pagetables routines */
-static struct hash* get_page_table(tid_t pid){
+struct hash* get_page_table(tid_t pid){
   lock_acquire(&page_table_list_lock);
   struct list_elem* e;
   struct hash* ret = NULL;
@@ -75,7 +82,7 @@ static struct hash* get_page_table(tid_t pid){
   return ret;
 }
 
-static struct hash* remove_page_table(tid_t pid){
+struct hash* remove_page_table(tid_t pid){
   lock_acquire(&page_table_list_lock);
   struct list_elem* e;
   for(e = list_begin(&page_table_list);
@@ -96,7 +103,7 @@ static struct hash* remove_page_table(tid_t pid){
         struct page* f = hash_entry(hash_cur(&i), struct page, hash_elem);
         if (f != NULL){
           /* frame should be thread safe */
-          frame_free(f->paddr);
+          frame_free(f->vaddr);
           free(f);
         }
       }
@@ -111,7 +118,7 @@ static struct hash* remove_page_table(tid_t pid){
   return NULL;
 }
 
-static struct hash* create_page_table(tid_t pid){
+struct hash* create_page_table(tid_t pid){
   lock_acquire(&page_table_list_lock);
 
   struct page_table_des* new = malloc(sizeof(struct page_table_des));

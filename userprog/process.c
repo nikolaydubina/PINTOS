@@ -150,6 +150,9 @@ start_process (void *args_r)
   struct intr_frame if_;
   bool success = false;
 
+  /* initialize page table */
+  create_page_table(thread_current()->tid);
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -243,6 +246,9 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+  /* removing page table */
+  remove_page_table(curr->tid);
 }
 
 /* Sets up the CPU for running user code in the current
