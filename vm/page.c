@@ -42,7 +42,7 @@ void page_destruct(void){
 
 /* get pageentry */
 struct page* page_get(void* vaddr){
-  struct page* ret = page_lookup(vaddr);
+  struct page* ret = page_lookup(pg_round_down(vaddr));
   return ret;
 }
 
@@ -91,6 +91,11 @@ bool load_page(struct page* page){
   //    break;
   //}
 
+  // comment this
+  success = true; // FIXME FIXME
+  if (success)
+    page->loaded = true;
+
   return success;
 }
 
@@ -100,7 +105,7 @@ bool grow_stack(void* vaddr){
   struct page* new_page = malloc(sizeof(struct page));
   
   /* check address validity */
-  if ((size_t)(PHYS_BASE - pg_round_down(vaddr)) > MAX_STACK)
+  if ((PHYS_BASE - pg_round_down(vaddr)) > MAX_STACK)
     return false;
 
   /* check frame */
@@ -112,6 +117,33 @@ bool grow_stack(void* vaddr){
 
   new_page->paddr = frame_create(PAL_USER, new_page);
   
+  if (new_page->vaddr == NULL){
+    free(new_page);
+    return false;
+  }
+
+  /* install page */
+  if (!install_page(new_page->vaddr, new_page->paddr, new_page->writable)){
+    free(new_page);
+    frame_free(new_page->paddr);
+    return false;
+  }
+  
+  return (hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL);
+}
+
+/* called in process -> load -> load_segment */
+bool page_insert(void* vaddr, void* paddr, bool writable){
+  struct page* new_page = malloc(sizeof(struct page));
+  
+  /* check frame */
+  new_page->vaddr = pg_round_down(vaddr);   /* rounding down to nearest page */
+  new_page->paddr = paddr;                  /* FIXME raw because of ad-hoc load_segment */
+  new_page->writable = true;
+  new_page->loaded = true;
+  new_page->pinned = !intr_context();
+  //new_page->type = PAGE_SWAP;
+
   if (new_page->vaddr == NULL){
     free(new_page);
     return false;

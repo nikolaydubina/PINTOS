@@ -47,6 +47,8 @@ void* frame_create(enum palloc_flags flags, struct page* page){
   if ((flags & PAL_USER) == 0)
     return NULL;
 
+
+  lock_acquire(&frame_table_lock);
   void* addr = palloc_get_page(flags);
 
   if (addr != NULL)
@@ -64,6 +66,7 @@ void* frame_create(enum palloc_flags flags, struct page* page){
 
     frame_insert(addr, page);
   }
+  lock_release(&frame_table_lock);
 
   return addr;
 }
@@ -74,9 +77,7 @@ void frame_insert(void* addr, struct page* page){
   new_frame->addr = addr;
   new_frame->page = page;
 
-  lock_acquire(&frame_table_lock);
   hash_insert(&frame_table, &new_frame->hash_elem);
-  lock_release(&frame_table_lock);
 }
 
 /* free frame at addr */
