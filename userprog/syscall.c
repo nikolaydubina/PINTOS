@@ -7,6 +7,13 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "userprog/syscall.h"
+#include "vm/page.h"
+
+#define ARG0(f) (correct_pointer(f->esp))
+#define ARG1(f) (ARG0(f) && correct_pointer(f->esp + 4))
+#define ARG2(f) (ARG1(f) && correct_pointer(f->esp + 8))
+#define ARG3(f) (ARG2(f) && correct_pointer(f->esp + 12))
+#define CHECK(c) if (!c) safe_exit(-1);
 
 static void syscall_handler (struct intr_frame*);
 
@@ -45,7 +52,21 @@ void syscall_init (void){
 }
 
 bool correct_pointer(void* p){
-  return is_user_vaddr(p) && (pagedir_get_page(thread_current()->pagedir, p) != NULL);
+  return (is_user_vaddr(p) && (pagedir_get_page(thread_current()->pagedir, p) != NULL));
+}
+
+/* FIXME: currently not working */
+bool correct_address(void* addr){
+  bool success = false;
+  struct page* curr_page = page_get((void*)addr);
+  if (curr_page != NULL){
+    load_page(curr_page);
+    success = curr_page->loaded;
+  }
+  else
+    success = grow_stack((void*)addr);
+  
+  return success;
 }
 
 void safe_exit(int exit_status){
@@ -56,11 +77,9 @@ void safe_exit(int exit_status){
 
 static void
 syscall_handler (struct intr_frame* f){
+  CHECK(ARG0(f))
+
   int syscall_num;
-
-  if (!correct_pointer(f->esp))
-    safe_exit(-1);
-
   memcpy(&syscall_num, f->esp, 4);
 
   /* dispatch */
@@ -129,11 +148,9 @@ static void syscall_halt(struct intr_frame* f){
 
 /* Terminate this process. */
 static void syscall_exit(struct intr_frame* f){
+  CHECK(ARG1(f))
+
   int exit_status;
-  
-  if (!(correct_pointer(f->esp) &&
-        correct_pointer(f->esp + 4)))
-    safe_exit(-1);
 
   memcpy(&exit_status, f->esp + 4, 4);
 
@@ -167,11 +184,9 @@ static void syscall_exit(struct intr_frame* f){
 
 /* Start another process. */
 static void syscall_exec(struct intr_frame* f){
-  char* cmd_line;
+  CHECK(ARG1(f))
 
-  if (!(correct_pointer(f->esp) &&
-        correct_pointer(f->esp + 4)))
-    safe_exit(-1);
+  char* cmd_line;
 
   memcpy(&cmd_line, f->esp + 4, 4);
   
@@ -190,11 +205,9 @@ static void syscall_exec(struct intr_frame* f){
 
 /* Wait for a child process to die. */
 static void syscall_wait(struct intr_frame* f){
-  int wpid;
+  CHECK(ARG1(f))
 
-  if (!(correct_pointer(f->esp) &&
-        correct_pointer(f->esp + 4)))
-    safe_exit(-1);
+  int wpid;
 
   memcpy(&wpid, f->esp + 4, 4);
 
@@ -204,13 +217,10 @@ static void syscall_wait(struct intr_frame* f){
 
 /* Create a file. */
 static void syscall_create(struct intr_frame* f){
+  CHECK(ARG2(f))
+
   const char* file;
   unsigned initial_size;
-
-  if (!(correct_pointer(f->esp) &&
-        correct_pointer(f->esp + 4) &&
-        correct_pointer(f->esp + 8)))
-    safe_exit(-1);
 
   memcpy(&file, f->esp + 4, 4);
   memcpy(&initial_size, f->esp + 8, 4);
@@ -226,11 +236,9 @@ static void syscall_create(struct intr_frame* f){
 
 /* Delete a file. */
 static void syscall_remove(struct intr_frame* f){
+  CHECK(ARG1(f))
+    
   const char* filename;
-
-  if (!(correct_pointer(f->esp) &&
-        correct_pointer(f->esp + 4)))
-    safe_exit(-1);
 
   memcpy(&filename, f->esp + 4, 4);
 
@@ -253,11 +261,9 @@ static void syscall_remove(struct intr_frame* f){
 
 /* Open a file. */
 static void syscall_open(struct intr_frame* f){
-  const char* filename;
+  CHECK(ARG1(f))
 
-  if (!(correct_pointer(f->esp) &&
-        correct_pointer(f->esp + 4)))
-    safe_exit(-1);
+  const char* filename;
 
   memcpy(&filename, f->esp + 4, 4);
 
@@ -286,11 +292,9 @@ static void syscall_open(struct intr_frame* f){
 
 /* Obtain a file's size. */
 static void syscall_filesize(struct intr_frame* f){
-  int fid;
+  CHECK(ARG1(f))
 
-  if (!(correct_pointer(f->esp) &&
-        correct_pointer(f->esp + 4)))
-    safe_exit(-1);
+  int fid;
 
   memcpy(&fid, f->esp + 4, 4);
 
@@ -310,15 +314,11 @@ static void syscall_filesize(struct intr_frame* f){
 }
 
 static void syscall_read(struct intr_frame* f){
+  CHECK(ARG3(f))
+
   int fid;
   char* buffer;
   unsigned size;
-
-  if (!(correct_pointer(f->esp) &&
-        correct_pointer(f->esp + 4) &&
-        correct_pointer(f->esp + 8) &&
-        correct_pointer(f->esp + 12)))
-    safe_exit(-1);
 
   memcpy(&fid, f->esp + 4, 4);
   memcpy(&buffer, f->esp + 8, 4);
@@ -356,15 +356,11 @@ static void syscall_read(struct intr_frame* f){
 }
 
 static void syscall_write(struct intr_frame* f){
+  CHECK(ARG3(f))
+
   int fid;
   const char* buffer;
   unsigned size;
-
-  if (!(correct_pointer(f->esp) &&
-        correct_pointer(f->esp + 4) &&
-        correct_pointer(f->esp + 8) &&
-        correct_pointer(f->esp + 12)))
-    safe_exit(-1);
 
   memcpy(&fid, f->esp + 4, 4);
   memcpy(&buffer, f->esp + 8, 4);
@@ -401,13 +397,10 @@ static void syscall_write(struct intr_frame* f){
 
 /* Change position in a file. */
 static void syscall_seek(struct intr_frame* f){
+  CHECK(ARG2(f))
+
   int fid;
   unsigned position;
-
-  if (!(correct_pointer(f->esp) &&
-        correct_pointer(f->esp + 4) &&
-        correct_pointer(f->esp + 8)))
-    safe_exit(-1);
 
   memcpy(&fid, f->esp + 4, 4);
   memcpy(&position, f->esp + 8, 4);
@@ -432,11 +425,9 @@ static void syscall_seek(struct intr_frame* f){
 
 /* Report current position in a file. */
 static void syscall_tell(struct intr_frame* f){
-  int fid;
+  CHECK(ARG1(f))
 
-  if (!(correct_pointer(f->esp) &&
-        correct_pointer(f->esp + 4)))
-    safe_exit(-1);
+  int fid;
 
   memcpy(&fid, f->esp + 4, 4);
 
@@ -460,11 +451,9 @@ static void syscall_tell(struct intr_frame* f){
 
 /* Close a file. */
 static void syscall_close(struct intr_frame* f){
-  int fid;
+  CHECK(ARG1(f))
 
-  if (!(correct_pointer(f->esp) &&
-        correct_pointer(f->esp + 4)))
-    safe_exit(-1);
+  int fid;
 
   memcpy(&fid, f->esp + 4, 4);
 

@@ -448,7 +448,7 @@ load (const char *file_name, void (**eip) (void), void **esp, args_descr* args)
  done:
   /* We arrive here whether the load is successful or not. */
   if (!success)
-    file_close (file);
+    file_close(file);
   else{
     thread_current()->exec_file = file;
     file_deny_write(file);
@@ -570,57 +570,53 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp, args_descr* args) 
 {
-  uint8_t *kpage;
   bool success = false;
+  
+  success = grow_stack(((uint8_t*)PHYS_BASE) - PGSIZE); 
+  if (!success)
+      return false;
 
-  kpage = frame_create(PAL_USER | PAL_ZERO, NULL);
-  if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success){
-        char* addr = (char*)PHYS_BASE;
+  char* addr = (char*)PHYS_BASE;
 
-        int argc = args->argc;
-        /* arguments values */
-        int i;
-        for(i = argc - 1; i >= 0; --i){
-          int l = strlen(args->argv[i]) + 1;
-          addr -= l;
-          memcpy(addr, args->argv[i], l * sizeof(char));
-        }
+  int argc = args->argc;
 
-        /* alignment */
-        addr -= 4;
-        addr = (char*)((int)addr - ((int) addr % 4));
+  /* arguments values */
+  int i;
+  for(i = argc - 1; i >= 0; --i){
+    int l = strlen(args->argv[i]) + 1;
+    addr -= l;
+    memcpy(addr, args->argv[i], l * sizeof(char));
+  }
 
-        /* adding null address */
-        void* null_addr = NULL;
-        addr -= sizeof(void*);
-        memcpy(addr, &null_addr, sizeof(void*));
+  /* alignment */
+  addr -= 4;
+  addr = (char*)((int)addr - ((int) addr % 4));
 
-        /* arguments addresses */
-        char* argv_addr = (char*)PHYS_BASE;
-        for(i = argc - 1; i >= 0 ; --i){
-          argv_addr -= strlen(args->argv[i]) + 1;
-          addr -= sizeof(char*);
-          memcpy(addr, &argv_addr, sizeof(char*));
-        }
+  /* adding null address */
+  void* null_addr = NULL;
+  addr -= sizeof(void*);
+  memcpy(addr, &null_addr, sizeof(void*));
 
-        /* pointer to array of args, argc, return addr */
-        int* arg0 = addr, zero = 0;
-        addr -= sizeof(char**);
-        memcpy(addr, &arg0, sizeof(char*));
-        addr -= sizeof(int);
-        memcpy(addr, &argc, sizeof(int));
-        addr -= sizeof(char*);
-        memcpy(addr, &zero, sizeof(char*));
+  /* arguments addresses */
+  char* argv_addr = (char*)PHYS_BASE;
+  for(i = argc - 1; i >= 0 ; --i){
+    argv_addr -= strlen(args->argv[i]) + 1;
+    addr -= sizeof(char*);
+    memcpy(addr, &argv_addr, sizeof(char*));
+  }
 
-        *esp = addr;
-        //hex_dump((uintptr_t) (PHYS_BASE - 200), (void **) (PHYS_BASE - 200), 200, true);
-      }
-      else
-        frame_free(kpage);
-    }
+  /* pointer to array of args, argc, return addr */
+  int* arg0 = addr, zero = 0;
+  addr -= sizeof(char**);
+  memcpy(addr, &arg0, sizeof(char*));
+  addr -= sizeof(int);
+  memcpy(addr, &argc, sizeof(int));
+  addr -= sizeof(char*);
+  memcpy(addr, &zero, sizeof(char*));
+
+  *esp = addr;
+  //hex_dump((uintptr_t) (PHYS_BASE - 200), (void **) (PHYS_BASE - 200), 200, true);
+
   return success;
 }
 

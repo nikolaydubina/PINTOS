@@ -40,54 +40,11 @@ void page_destruct(void){
   free(thread_current()->page_table);
 }
 
-/* allocate new entry */
-//void* page_allocate(enum palloc_flags flags){
-//  struct page* new_page = malloc(sizeof(struct page));
-//
-//  new_page->paddr = frame_create(flags, new_page); // flags == PAL_USER
-//
-//  /* check frame */
-//  new_page->vaddr = pg_round_down(vaddr);   /* rounding down to nearest page */
-//  new_page->writable = true;
-//  new_page->loaded = true;
-//  new_page->pinned = !intr_context();
-//  //new_page->type = PAGE_SWAP;
-//
-//  new_page->paddr = frame_create(PAL_USER, new_page);
-//  
-//  if (new_page->vaddr == NULL){
-//    free(new_page);
-//    return false;
-//  }
-//
-//  /* install page */
-//  if (!install_page(new_page->vaddr, new_page->paddr, new_page->writable)){
-//    free(new_page);
-//    frame_free(new_page->paddr);
-//    return false;
-//  }
-//  
-//  return (hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL);
-//  
-//  hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem);
-//
-//  return new_page->vaddr;
-//}
-//
-///* get pageentry */
-//struct page* page_get(void* vaddr){
-//  struct page* ret = page_lookup(vaddr);
-//  return ret;
-//}
-//
-///* free frame from page-table */
-//void page_free(void* vaddr){
-//  struct page* curr_page = page_lookup(vaddr);
-//  if (curr_page != NULL){
-//    frame_free(curr_page->vaddr);
-//    hash_delete(&(thread_current()->page_table->table), &curr_page->hash_elem);
-//  }
-//}
+/* get pageentry */
+struct page* page_get(void* vaddr){
+  struct page* ret = page_lookup(vaddr);
+  return ret;
+}
 
 /* Returns a hash value for page p. */
 static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED){
@@ -114,6 +71,7 @@ static struct page* page_lookup(const void *vaddress){
   return e != NULL ? hash_entry(e, struct page, hash_elem) : NULL;
 }
 
+/* loads page if it is not loaded already */
 bool load_page(struct page* page){
   bool success = false;
   page->pinned = true;
@@ -136,12 +94,14 @@ bool load_page(struct page* page){
   return success;
 }
 
+/* adds new page that covers passed virtual address
+ * called in: page_fault, setup_stack, correct_pointer */
 bool grow_stack(void* vaddr){
   struct page* new_page = malloc(sizeof(struct page));
   
   /* check address validity */
-  //if ((size_t)(PHYS_BASE - pg_round_down(uva)) > MAX_STACK_SIZE)
-  //  return false;
+  if ((size_t)(PHYS_BASE - pg_round_down(vaddr)) > MAX_STACK)
+    return false;
 
   /* check frame */
   new_page->vaddr = pg_round_down(vaddr);   /* rounding down to nearest page */
