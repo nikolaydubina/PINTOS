@@ -36,7 +36,7 @@ static struct frame* frame_lookup(const void *address){
   struct frame p;
   struct hash_elem *e;
 
-  p.addr = address;
+  p.addr = (void*)address;
   e = hash_find(&frame_table, &p.hash_elem);
   return e != NULL ? hash_entry(e, struct frame, hash_elem) : NULL;
 }
@@ -49,7 +49,7 @@ void* frame_create(enum palloc_flags flags, struct page* page){
 
   void* addr = palloc_get_page(flags);
 
-  if (addr)
+  if (addr != NULL)
     frame_insert(addr, page);
   else{
     // Eviction here

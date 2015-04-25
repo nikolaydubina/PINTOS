@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <kern/list.h>
+#include "kernel/list.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -24,14 +24,14 @@
 #define MAX_ARGC 100
 #define MAX_ARGSIZE 4000
 
-static struct args_descr{
+struct args_descr{
   int argc;
   char **argv;
   bool loaded;
   struct semaphore sema_loaded;
 };
 
-static struct process_descr{
+struct process_descr{
   tid_t pid;
   tid_t parent_pid; 
   int exit_status;
@@ -248,7 +248,7 @@ process_exit (void)
     }
 
   /* removing page table */
-  page_desctruct();
+  page_destruct();
 }
 
 /* Sets up the CPU for running user code in the current
@@ -459,7 +459,7 @@ load (const char *file_name, void (**eip) (void), void **esp, args_descr* args)
 
 /* load() helpers. */
 
-static bool install_page (void *upage, void *kpage, bool writable);
+bool install_page (void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -633,8 +633,7 @@ setup_stack (void **esp, args_descr* args)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool
-install_page (void *upage, void *kpage, bool writable)
+bool install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
 

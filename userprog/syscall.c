@@ -1,4 +1,3 @@
-#include "userprog/syscall.h"
 #include <stdio.h>
 #include <lib/kernel/console.h>
 #include <syscall-nr.h>
@@ -7,6 +6,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "userprog/syscall.h"
 
 static void syscall_handler (struct intr_frame*);
 
@@ -25,6 +25,7 @@ static void syscall_tell(struct intr_frame*);
 static void syscall_close(struct intr_frame*);
 
 static struct file_descr* lookup_file(int fid);
+bool correct_pointer(void* p);
 
 struct file_descr{
   int fid;

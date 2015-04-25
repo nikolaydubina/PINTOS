@@ -156,8 +156,10 @@ page_fault (struct intr_frame *f)
   bool success = false;
   if (not_present && is_user_vaddr(fault_addr)){
       struct page* curr_page = page_get(fault_addr);
+
       if (curr_page != NULL){
-        ;  // check;
+        success = load_page(curr_page);
+        curr_page->pinned = false;    // TODO: WHY?
       }
       else{
         success = grow_stack(fault_addr);
