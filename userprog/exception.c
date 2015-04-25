@@ -153,7 +153,8 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   bool success = false;
-  if (not_present && is_user_vaddr(fault_addr)){
+  if (not_present && fault_addr > USER_VADDR_BOTTOM &&
+      is_user_vaddr(fault_addr)){
       struct page* curr_page = page_get(fault_addr);
 
       if (curr_page != NULL){

@@ -555,11 +555,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           palloc_free_page (kpage);
           return false; 
       }
-      //if (!install_page (upage, kpage, writable)) 
-      //  {
-      //    palloc_free_page (kpage);
-      //    return false; 
-      //  }
 
       /* Advance. */
       read_bytes -= page_read_bytes;
