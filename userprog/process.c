@@ -551,11 +551,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
       /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-        {
+      if(!page_insert(upage, kpage, writable)){
           palloc_free_page (kpage);
           return false; 
-        }
+      }
+      //if (!install_page (upage, kpage, writable)) 
+      //  {
+      //    palloc_free_page (kpage);
+      //    return false; 
+      //  }
 
       /* Advance. */
       read_bytes -= page_read_bytes;

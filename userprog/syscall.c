@@ -9,11 +9,13 @@
 #include "userprog/syscall.h"
 #include "vm/page.h"
 
-#define ARG0(f) (correct_pointer(f->esp))
-#define ARG1(f) (ARG0(f) && correct_pointer(f->esp + 4))
-#define ARG2(f) (ARG1(f) && correct_pointer(f->esp + 8))
-#define ARG3(f) (ARG2(f) && correct_pointer(f->esp + 12))
-#define CHECK(c) if (!c) safe_exit(-1);
+#define ARG0 (correct_pointer(f->esp))
+#define ARG1 (ARG0 && correct_pointer(f->esp + 4))
+#define ARG2 (ARG1 && correct_pointer(f->esp + 8))
+#define ARG3 (ARG2 && correct_pointer(f->esp + 12))
+#define CHECK(c) if (!c) safe_exit(ERROR);
+
+#define ERROR -1
 
 static void syscall_handler (struct intr_frame*);
 
@@ -55,8 +57,11 @@ bool correct_pointer(void* p){
   return (is_user_vaddr(p) && (pagedir_get_page(thread_current()->pagedir, p) != NULL));
 }
 
-/* FIXME: currently not working */
 bool correct_address(void* addr){
+
+  if (!is_user_vaddr(addr))
+    return false;
+
   bool success = false;
   struct page* curr_page = page_get((void*)addr);
   if (curr_page != NULL){
@@ -64,20 +69,20 @@ bool correct_address(void* addr){
     success = curr_page->loaded;
   }
   else
-    success = grow_stack((void*)addr);
-  
+    success = grow_stack(addr);
+
   return success;
 }
 
 void safe_exit(int exit_status){
   thread_current()->exit_status = exit_status;
-  printf( "%s: exit(%d)\n", thread_name(), exit_status);
+  printf("%s: exit(%d)\n", thread_name(), exit_status);
   thread_exit();
 }
 
 static void
 syscall_handler (struct intr_frame* f){
-  CHECK(ARG0(f))
+  CHECK(ARG0)
 
   int syscall_num;
   memcpy(&syscall_num, f->esp, 4);
@@ -148,7 +153,7 @@ static void syscall_halt(struct intr_frame* f){
 
 /* Terminate this process. */
 static void syscall_exit(struct intr_frame* f){
-  CHECK(ARG1(f))
+  CHECK(ARG1)
 
   int exit_status;
 
@@ -184,28 +189,28 @@ static void syscall_exit(struct intr_frame* f){
 
 /* Start another process. */
 static void syscall_exec(struct intr_frame* f){
-  CHECK(ARG1(f))
+  CHECK(ARG1)
 
   char* cmd_line;
 
   memcpy(&cmd_line, f->esp + 4, 4);
   
-  if (!(correct_pointer(cmd_line) && cmd_line != NULL)){
-    f->eax = -1;
+  if (!(correct_address(cmd_line) && cmd_line != NULL)){
+    f->eax = ERROR;
     return;
   }
 
   int new_pid;
   new_pid = process_execute(cmd_line); // pid == tid
   if (new_pid == TID_ERROR)
-    f->eax = -1;
+    f->eax = ERROR;
   else
     f->eax = new_pid;
 }
 
 /* Wait for a child process to die. */
 static void syscall_wait(struct intr_frame* f){
-  CHECK(ARG1(f))
+  CHECK(ARG1)
 
   int wpid;
 
@@ -217,7 +222,7 @@ static void syscall_wait(struct intr_frame* f){
 
 /* Create a file. */
 static void syscall_create(struct intr_frame* f){
-  CHECK(ARG2(f))
+  CHECK(ARG2)
 
   const char* file;
   unsigned initial_size;
@@ -225,8 +230,8 @@ static void syscall_create(struct intr_frame* f){
   memcpy(&file, f->esp + 4, 4);
   memcpy(&initial_size, f->esp + 8, 4);
 
-  if (!(correct_pointer(file) && file != NULL))
-    safe_exit(-1);
+  if (!(correct_address(file) && file != NULL))
+    safe_exit(ERROR);
     
   lock_acquire(&opened_files_lock);
   bool success = filesys_create(file, initial_size);
@@ -236,21 +241,21 @@ static void syscall_create(struct intr_frame* f){
 
 /* Delete a file. */
 static void syscall_remove(struct intr_frame* f){
-  CHECK(ARG1(f))
+  CHECK(ARG1)
     
   const char* filename;
 
   memcpy(&filename, f->esp + 4, 4);
 
-  if (!(correct_pointer(filename) && filename != NULL))
-    safe_exit(-1);
+  if (!(correct_address(filename) && filename != NULL))
+    safe_exit(ERROR);
 
   lock_acquire(&opened_files_lock);
 
   struct file* rm_file = filesys_open(filename);
   if (rm_file == NULL){
     lock_release(&opened_files_lock);
-    f->eax = -1;
+    f->eax = ERROR;
     return;
   }
 
@@ -261,14 +266,14 @@ static void syscall_remove(struct intr_frame* f){
 
 /* Open a file. */
 static void syscall_open(struct intr_frame* f){
-  CHECK(ARG1(f))
+  CHECK(ARG1)
 
   const char* filename;
 
   memcpy(&filename, f->esp + 4, 4);
 
-  if (!(correct_pointer(filename) && filename != NULL))
-    safe_exit(-1);
+  if (!(correct_address(filename) && filename != NULL))
+    safe_exit(ERROR);
 
   static int last_fid = 2;
 
@@ -278,7 +283,7 @@ static void syscall_open(struct intr_frame* f){
   struct file* new_file = filesys_open(filename);
 
   if (new_file == NULL)
-    f->eax = -1;
+    f->eax = ERROR;
   else{
     struct file_descr* newfile_descr = malloc(sizeof(struct file_descr));
     newfile_descr->fid = new_fid;
@@ -292,21 +297,21 @@ static void syscall_open(struct intr_frame* f){
 
 /* Obtain a file's size. */
 static void syscall_filesize(struct intr_frame* f){
-  CHECK(ARG1(f))
+  CHECK(ARG1)
 
   int fid;
 
   memcpy(&fid, f->esp + 4, 4);
 
   if (fid == 0 || fid == 1)
-    safe_exit(-1);
+    safe_exit(ERROR);
 
   lock_acquire(&opened_files_lock);
   struct file_descr* fdescr = lookup_file(fid);
 
   if (fdescr == NULL){
     lock_release(&opened_files_lock);
-    safe_exit(-1);
+    safe_exit(ERROR);
   }
 
   f->eax = file_length(fdescr->file);
@@ -314,7 +319,7 @@ static void syscall_filesize(struct intr_frame* f){
 }
 
 static void syscall_read(struct intr_frame* f){
-  CHECK(ARG3(f))
+  CHECK(ARG3)
 
   int fid;
   char* buffer;
@@ -324,13 +329,13 @@ static void syscall_read(struct intr_frame* f){
   memcpy(&buffer, f->esp + 8, 4);
   memcpy(&size, f->esp + 12, 4);
 
-  if (!(correct_pointer(buffer) && buffer != NULL))
-    safe_exit(-1);
+  if (!(correct_address(buffer) && buffer != NULL))
+    safe_exit(ERROR);
     
   int asize =  size < 10000000 ? size : 10000000;
 
   if (fid == 1)
-    safe_exit(-1);
+    safe_exit(ERROR);
 
   if (fid == 0){
     int i;
@@ -339,7 +344,7 @@ static void syscall_read(struct intr_frame* f){
     if (i == asize)
       f->eax = asize;
     else
-      f->eax = -1;
+      f->eax = ERROR;
   }
   else{
     lock_acquire(&opened_files_lock);
@@ -347,7 +352,7 @@ static void syscall_read(struct intr_frame* f){
 
     if (fdescr == NULL){
       lock_release(&opened_files_lock);
-      safe_exit(-1);
+      safe_exit(ERROR);
     }
 
     f->eax = file_read(fdescr->file, buffer, asize);
@@ -356,7 +361,7 @@ static void syscall_read(struct intr_frame* f){
 }
 
 static void syscall_write(struct intr_frame* f){
-  CHECK(ARG3(f))
+  CHECK(ARG3)
 
   int fid;
   const char* buffer;
@@ -366,11 +371,11 @@ static void syscall_write(struct intr_frame* f){
   memcpy(&buffer, f->esp + 8, 4);
   memcpy(&size, f->esp + 12, 4);
 
-  if (!(correct_pointer(buffer) && buffer != NULL))
-    safe_exit(-1);
+  if (!(correct_address(buffer) && buffer != NULL))
+    safe_exit(ERROR);
    
   if (fid == 0)
-    safe_exit(-1);
+    safe_exit(ERROR);
 
   int asize =  size < 10000000 ? size : 10000000;
 
@@ -386,7 +391,7 @@ static void syscall_write(struct intr_frame* f){
 
     if (fdescr == NULL){
       lock_release(&opened_files_lock);
-      f->eax = -1;
+      f->eax = ERROR;
       return;
     }
 
@@ -397,7 +402,7 @@ static void syscall_write(struct intr_frame* f){
 
 /* Change position in a file. */
 static void syscall_seek(struct intr_frame* f){
-  CHECK(ARG2(f))
+  CHECK(ARG2)
 
   int fid;
   unsigned position;
@@ -406,7 +411,7 @@ static void syscall_seek(struct intr_frame* f){
   memcpy(&position, f->esp + 8, 4);
 
   if (fid == 0 || fid == 1){
-    f->eax = -1;
+    f->eax = ERROR;
     return;
   }
 
@@ -415,7 +420,7 @@ static void syscall_seek(struct intr_frame* f){
 
   if (fdescr == NULL){
     lock_release(&opened_files_lock);
-    f->eax = -1;
+    f->eax = ERROR;
     return;
   }
 
@@ -425,14 +430,14 @@ static void syscall_seek(struct intr_frame* f){
 
 /* Report current position in a file. */
 static void syscall_tell(struct intr_frame* f){
-  CHECK(ARG1(f))
+  CHECK(ARG1)
 
   int fid;
 
   memcpy(&fid, f->esp + 4, 4);
 
   if (fid == 0 || fid == 1){
-    f->eax = -1;
+    f->eax = ERROR;
     return;
   }
 
@@ -441,7 +446,7 @@ static void syscall_tell(struct intr_frame* f){
 
   if (fdescr == NULL){
     lock_release(&opened_files_lock);
-    f->eax = -1;
+    f->eax = ERROR;
     return;
   }
 
@@ -451,14 +456,14 @@ static void syscall_tell(struct intr_frame* f){
 
 /* Close a file. */
 static void syscall_close(struct intr_frame* f){
-  CHECK(ARG1(f))
+  CHECK(ARG1)
 
   int fid;
 
   memcpy(&fid, f->esp + 4, 4);
 
   if (fid == 0 || fid == 1){
-    f->eax = -1;
+    f->eax = ERROR;
     return;
   }
 
@@ -467,7 +472,7 @@ static void syscall_close(struct intr_frame* f){
 
   if (fdescr == NULL){
     lock_release(&opened_files_lock);
-    f->eax = -1;
+    f->eax = ERROR;
     return;
   }
 
