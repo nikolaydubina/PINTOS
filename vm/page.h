@@ -9,6 +9,9 @@
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 
+//#define MAX_STACK (4 * (1 << 10)) /* 4096 bytes */
+#define MAX_STACK (4 * (1 << 20)) /* 4MB */
+
 enum page_type{
   PAGE_FILE,
   PAGE_SWAP,
@@ -38,9 +41,7 @@ void page_init(void);
 void page_construct(void);
 void page_destruct(void);
 
-//void* page_allocate(enum palloc_flags flags);
-//struct page* page_get(void* addr);
-//void page_free(void* addr);
+struct page* page_get(void* addr);
 
 bool load_page(struct page* page);
 bool grow_stack(void* vaddr);

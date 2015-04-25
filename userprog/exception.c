@@ -152,7 +152,6 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* FIXME */
   bool success = false;
   if (not_present && is_user_vaddr(fault_addr)){
       struct page* curr_page = page_get(fault_addr);
@@ -161,9 +160,8 @@ page_fault (struct intr_frame *f)
         success = load_page(curr_page);
         curr_page->pinned = false;    // TODO: WHY?
       }
-      else{
+      else
         success = grow_stack(fault_addr);
-      }
   }
   if (!success){
     /* To implement virtual memory, delete the rest of the function
