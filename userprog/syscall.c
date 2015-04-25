@@ -9,10 +9,10 @@
 #include "userprog/syscall.h"
 #include "vm/page.h"
 
-#define ARG0 (correct_pointer(f->esp))
-#define ARG1 (ARG0 && correct_pointer(f->esp + 4))
-#define ARG2 (ARG1 && correct_pointer(f->esp + 8))
-#define ARG3 (ARG2 && correct_pointer(f->esp + 12))
+#define ARG0 (correct_address(f->esp))
+#define ARG1 (ARG0 && correct_address(f->esp + 4))
+#define ARG2 (ARG1 && correct_address(f->esp + 8))
+#define ARG3 (ARG2 && correct_address(f->esp + 12))
 #define CHECK(c) if (!c) safe_exit(ERROR);
 
 #define ERROR -1
@@ -34,7 +34,8 @@ static void syscall_tell(struct intr_frame*);
 static void syscall_close(struct intr_frame*);
 
 static struct file_descr* lookup_file(int fid);
-bool correct_pointer(void* p);
+bool correct_address(void* p);
+bool correct_buffer(void* p, size_t n);
 
 struct file_descr{
   int fid;
@@ -53,17 +54,12 @@ void syscall_init (void){
   lock_init(&opened_files_lock);
 }
 
-bool correct_pointer(void* p){
-  return (is_user_vaddr(p) && (pagedir_get_page(thread_current()->pagedir, p) != NULL));
-}
-
 bool correct_address(void* addr){
-
-  if (!is_user_vaddr(addr))
+  if (!(is_user_vaddr(addr) && addr > USER_VADDR_BOTTOM && addr != NULL))
     return false;
 
   bool success = false;
-  struct page* curr_page = page_get((void*)addr);
+  struct page* curr_page = page_get(addr);
   if (curr_page != NULL){
     load_page(curr_page);
     success = curr_page->loaded;
@@ -72,6 +68,34 @@ bool correct_address(void* addr){
     success = grow_stack(addr);
 
   return success;
+}
+
+bool correct_buffer(void* p, size_t n){
+  if (!correct_address(p))
+    return false;
+
+  int i;
+  bool ret = true;
+
+  for(i = 0; i < n && ret; ++i){
+    ret = correct_address(p + i);
+  }
+
+  return ret;
+}
+
+bool correct_string(void* p){
+  if (!correct_address(p))
+    return false;
+
+  bool ret = true;
+  void* pc = p;
+  ret = correct_address(pc);
+  while (*(char*)pc != 0 && ret){
+    pc = (char*)pc + 1;
+    ret = correct_address(pc);
+  }
+  return ret;
 }
 
 void safe_exit(int exit_status){
@@ -195,7 +219,7 @@ static void syscall_exec(struct intr_frame* f){
 
   memcpy(&cmd_line, f->esp + 4, 4);
   
-  if (!(correct_address(cmd_line) && cmd_line != NULL)){
+  if (!correct_string(cmd_line)){
     f->eax = ERROR;
     return;
   }
@@ -230,7 +254,7 @@ static void syscall_create(struct intr_frame* f){
   memcpy(&file, f->esp + 4, 4);
   memcpy(&initial_size, f->esp + 8, 4);
 
-  if (!(correct_address(file) && file != NULL))
+  if (!correct_string(file))
     safe_exit(ERROR);
     
   lock_acquire(&opened_files_lock);
@@ -247,7 +271,7 @@ static void syscall_remove(struct intr_frame* f){
 
   memcpy(&filename, f->esp + 4, 4);
 
-  if (!(correct_address(filename) && filename != NULL))
+  if (!correct_string(filename))
     safe_exit(ERROR);
 
   lock_acquire(&opened_files_lock);
@@ -272,7 +296,7 @@ static void syscall_open(struct intr_frame* f){
 
   memcpy(&filename, f->esp + 4, 4);
 
-  if (!(correct_address(filename) && filename != NULL))
+  if (!correct_string(filename))
     safe_exit(ERROR);
 
   static int last_fid = 2;
@@ -329,7 +353,7 @@ static void syscall_read(struct intr_frame* f){
   memcpy(&buffer, f->esp + 8, 4);
   memcpy(&size, f->esp + 12, 4);
 
-  if (!(correct_address(buffer) && buffer != NULL))
+  if (!correct_buffer(buffer, size))
     safe_exit(ERROR);
     
   int asize =  size < 10000000 ? size : 10000000;
@@ -371,7 +395,7 @@ static void syscall_write(struct intr_frame* f){
   memcpy(&buffer, f->esp + 8, 4);
   memcpy(&size, f->esp + 12, 4);
 
-  if (!(correct_address(buffer) && buffer != NULL))
+  if (!correct_buffer(buffer, size))
     safe_exit(ERROR);
    
   if (fid == 0)
