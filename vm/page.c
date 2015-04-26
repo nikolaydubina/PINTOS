@@ -77,22 +77,20 @@ bool load_page(struct page* page){
   page->pinned = true;
 
   if (page->loaded)
-    return success;
+    success = true;
+  else
+    //switch (page->type){
+    //  case FILE:
+    //    success = load_file(page);
+    //    break;
+    //  case SWAP:
+    //    success = load_swap(page);
+    //    break;
+    //  case MMAP:
+    //    success = load_file(page);
+    //    break;
+    //}
 
-  //switch (page->type){
-  //  case FILE:
-  //    success = load_file(page);
-  //    break;
-  //  case SWAP:
-  //    success = load_swap(page);
-  //    break;
-  //  case MMAP:
-  //    success = load_file(page);
-  //    break;
-  //}
-
-  // comment this
-  success = true; // FIXME FIXME
   if (success)
     page->loaded = true;
 
@@ -134,8 +132,11 @@ bool grow_stack(void* vaddr){
 
 /* called in process -> load -> load_segment */
 bool page_insert(void* vaddr, void* paddr, bool writable){
+  if (!is_user_vaddr(vaddr) || !is_kernel_vaddr(paddr))
+    return false;
+
   struct page* new_page = malloc(sizeof(struct page));
-  
+
   /* check frame */
   new_page->vaddr = pg_round_down(vaddr);   /* rounding down to nearest page */
   new_page->paddr = paddr;                  /* FIXME raw because of ad-hoc load_segment */

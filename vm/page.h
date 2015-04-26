@@ -18,12 +18,12 @@ enum page_type{
 };
 
 struct page{
-  void* vaddr;          /* page,  user,   virual   address */
-  void* paddr;          /* frame, kernel, physical address */
+  void* vaddr;          /* page,  user,   address */
+  void* paddr;          /* frame, kernel, address */
 
   bool writable;        /* user allowed to write */
   bool loaded;          /* ready for read/write */
-  bool pinned;          /* true if not in Interrupt context. FIXME*/
+  bool pinned;          /* must not be evicted */
 
   enum page_type type;
 
