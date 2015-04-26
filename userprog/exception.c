@@ -153,7 +153,7 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   bool success = false;
-  if (not_present && fault_addr > USER_VADDR_BOTTOM &&
+  if (not_present && fault_addr > USER_VADDR_MIN &&
       is_user_vaddr(fault_addr)){
       struct page* curr_page = page_get(fault_addr);
 
@@ -161,7 +161,7 @@ page_fault (struct intr_frame *f)
         success = load_page(curr_page);
         curr_page->pinned = false;    // TODO: WHY?
       }
-      else
+      else if (is_stack_access(fault_addr, f->esp))
         success = grow_stack(fault_addr);
   }
   if (!success){
