@@ -158,8 +158,12 @@ page_fault (struct intr_frame *f)
       struct page* curr_page = page_get(fault_addr);
 
       if (curr_page != NULL){
-        success = load_page(curr_page);
-        curr_page->pinned = false;    // TODO: WHY?
+        if (write && !curr_page->writable)
+          success = false;
+        else{
+          success = load_page(curr_page);
+          curr_page->pinned = false;    // TODO: WHY?
+        }
       }
       else if (is_stack_access(fault_addr, f->esp))
         success = grow_stack(fault_addr);
