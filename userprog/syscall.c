@@ -35,7 +35,7 @@ static void syscall_close(struct intr_frame*);
 
 static struct file_descr* lookup_file(int fid);
 bool correct_address(void* p, void* esp);
-bool correct_buffer(void* p, size_t n, void* esp);
+bool correct_buffer(void* p, size_t n, void* esp, bool write);
 bool correct_string(void* p, void* esp);
 
 struct file_descr{
@@ -75,7 +75,7 @@ bool correct_address(void* addr, void* esp){
   return success;
 }
 
-bool correct_buffer(void* p, unsigned n, void* esp){
+bool correct_buffer(void* p, unsigned n, void* esp, bool write){
   if (!correct_address(p, esp))
     return false;
 
@@ -84,6 +84,10 @@ bool correct_buffer(void* p, unsigned n, void* esp){
 
   for(i = 0; i < n && ret; ++i){
     ret = correct_address(p + i, esp);
+    if (write){
+      struct page* curr = page_get(p);
+      ret = curr->writable;
+    }
   }
 
   return ret;
@@ -361,7 +365,7 @@ static void syscall_read(struct intr_frame* f){
   memcpy(&buffer, f->esp + 8, 4);
   memcpy(&size, f->esp + 12, 4);
 
-  if (!correct_buffer(buffer, size, f->esp))
+  if (!correct_buffer(buffer, size, f->esp, true))
     safe_exit(ERROR);
     
   int asize =  size < 10000000 ? size : 10000000;
@@ -403,7 +407,7 @@ static void syscall_write(struct intr_frame* f){
   memcpy(&buffer, f->esp + 8, 4);
   memcpy(&size, f->esp + 12, 4);
 
-  if (!correct_buffer(buffer, size, f->esp))
+  if (!correct_buffer(buffer, size, f->esp, true)) // FIXME: Check writable flag
     safe_exit(ERROR);
    
   if (fid == 0)
