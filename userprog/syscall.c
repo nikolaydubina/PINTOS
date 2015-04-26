@@ -11,10 +11,10 @@
 
 #define ERROR -1
 
-#define ARG0 correct_address(f->esp, f->esp)
-#define ARG1 ARG0 && correct_address(f->esp + 4, f->esp)
-#define ARG2 ARG1 && correct_address(f->esp + 8, f->esp)
-#define ARG3 ARG2 && correct_address(f->esp + 12, f->esp)
+#define ARG0 correct_address(f->esp, PHYS_BASE)
+#define ARG1 ARG0 && correct_address(f->esp + 4, PHYS_BASE)
+#define ARG2 ARG1 && correct_address(f->esp + 8, PHYS_BASE)
+#define ARG3 ARG2 && correct_address(f->esp + 12, PHYS_BASE)
 #define CHECK(c) if (!(c)) safe_exit(ERROR);
 
 static void syscall_handler (struct intr_frame*);
