@@ -90,7 +90,8 @@ void frame_free(void* addr){
   if (f != NULL){
     hash_delete(&frame_table, &f->hash_elem);
     free(f);
-    palloc_free_page(addr);
+    // FIXME: Why following causes fault?
+    //palloc_free_page(addr);
   }
 
   lock_release(&frame_table_lock);

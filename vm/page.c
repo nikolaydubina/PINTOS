@@ -29,9 +29,9 @@ void page_construct(void){
 static void destroy_hentry(struct hash_elem* e, void *aux UNUSED){
   struct page* dpage = hash_entry(e, struct page, hash_elem);
 
-  if (dpage != NULL){
-    frame_free(dpage->vaddr);
-  }
+  if (dpage != NULL)
+    frame_free(dpage->paddr);
+
   free(dpage);
 }
 
@@ -122,8 +122,8 @@ bool grow_stack(void* vaddr){
 
   /* install page */
   if (!install_page(new_page->vaddr, new_page->paddr, new_page->writable)){
-    free(new_page);
     frame_free(new_page->paddr);
+    free(new_page);
     return false;
   }
   
@@ -140,7 +140,7 @@ bool page_insert(void* vaddr, void* paddr, bool writable){
   /* check frame */
   new_page->vaddr = pg_round_down(vaddr);   /* rounding down to nearest page */
   new_page->paddr = paddr;                  /* FIXME raw because of ad-hoc load_segment */
-  new_page->writable = true;
+  new_page->writable = writable;
   new_page->loaded = true;
   new_page->pinned = !intr_context();
   //new_page->type = PAGE_SWAP;
@@ -152,8 +152,8 @@ bool page_insert(void* vaddr, void* paddr, bool writable){
 
   /* install page */
   if (!install_page(new_page->vaddr, new_page->paddr, new_page->writable)){
-    free(new_page);
     frame_free(new_page->paddr);
+    free(new_page);
     return false;
   }
   
