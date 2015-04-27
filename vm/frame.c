@@ -47,19 +47,18 @@ void* frame_create(enum palloc_flags flags, struct page* page){
   if ((flags & PAL_USER) == 0)
     return NULL;
 
-
   lock_acquire(&frame_table_lock);
   void* addr = palloc_get_page(flags);
 
   if (addr != NULL)
     frame_insert(addr, page);
   else{
-    // Eviction here
-    //while (!addr){
-    //  addr = frame_evict(flags);
-    //  lock_release(&frame_table_lock);
-    //}
-
+    /* frame eviction */
+    while (!addr){
+      addr = frame_evict(flags);
+      lock_release(&frame_table_lock);
+    }
+    
     // DEBUG
     if (!addr)
       PANIC ("Frame was not evicted properly");
@@ -95,4 +94,10 @@ void frame_free(void* addr){
   }
 
   lock_release(&frame_table_lock);
+}
+
+void* frame_evict(enum pallog_flags flags){
+  // TODO: code it
+
+  return NULL;
 }
