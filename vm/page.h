@@ -8,8 +8,9 @@
 #include "threads/thread.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
+#include "kernel/bitmap.h"
 
-#define MAX_STACK (4 * (1 << 20)) /* 4MB */
+#define MAX_STACK (8 * (1 << 20)) /* 4MB */
 
 enum page_type{
   PAGE_FILE,
@@ -24,6 +25,8 @@ struct page{
   bool writable;        /* user allowed to write */
   bool loaded;          /* ready for read/write */
   bool pinned;          /* must not be evicted */
+
+  size_t swapid;        /* id of page in swap disk */
 
   enum page_type type;
 
