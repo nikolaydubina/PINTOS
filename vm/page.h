@@ -19,14 +19,16 @@ enum page_type{
 };
 
 struct page{
-  void* vaddr;          /* page,  user,   address */
-  void* paddr;          /* frame, kernel, address */
+  void* vaddr;            /* page,  user,   address */
+  void* paddr;            /* frame, kernel, address */
 
-  bool writable;        /* user allowed to write */
-  bool loaded;          /* ready for read/write */
-  bool pinned;          /* must not be evicted */
+  bool writable;          /* user allowed to write */
+  bool loaded;            /* ready for read/write */
+  bool pinned;            /* must not be evicted */
 
-  size_t swap_id;       /* id of page in swap disk */
+  size_t swap_id;         /* id of page in swap disk */
+  
+  struct thread* thread;  /* for frame viction */ 
 
   enum page_type type;
 

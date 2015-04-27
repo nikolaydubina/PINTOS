@@ -4,6 +4,8 @@
 static struct lock frame_table_lock;
 static struct hash frame_table;
 
+void* frame_evict(enum palloc_flags flags);
+
 /* Returns a hash value for frame p. */
 static unsigned frame_hash(const struct hash_elem *p_, void *aux UNUSED){
   const struct frame* p = hash_entry(p_, struct frame, hash_elem);
@@ -47,10 +49,10 @@ void* frame_create(enum palloc_flags flags, struct page* page){
     frame_insert(addr, page);
   else{
     /* frame eviction */
-    //while (!addr){
-    //  addr = frame_evict(flags);
-    //  lock_release(&frame_table_lock);
-    //}
+    while (!addr){
+      addr = frame_evict(flags);
+      lock_release(&frame_table_lock);
+    }
     
     // DEBUG
     if (!addr)
@@ -90,7 +92,52 @@ void frame_free(void* addr){
 }
 
 void* frame_evict(enum palloc_flags flags){
-  // TODO: code it
+  lock_acquire(&frame_table_lock);
 
-  return NULL;
+  struct frame* evict_frame = NULL;
+  struct page* evict_page = NULL;
+  struct thread* evict_thread = NULL;
+
+  /* busy waiting for frame to evict */
+  struct hash_iterator e;
+  hash_first(&e, &frame_table);
+  while(evict_frame == NULL){
+    struct frame* curr_frame = hash_entry(hash_cur(&e), struct frame, hash_elem);
+    struct page* curr_page = curr_frame->page;
+
+    if (!curr_frame->page->pinned){
+        struct thread *pthread = curr_page->thread;
+
+        if (pagedir_is_accessed(pthread->pagedir, curr_page->vaddr))
+          pagedir_set_accessed(pthread->pagedir, curr_page->vaddr, false);
+        else{
+          evict_frame = curr_frame;
+          evict_page = curr_page;
+          evict_thread = pthread;
+        }
+    }
+
+    if (!hash_next(&e))
+      hash_first(&e, &frame_table);
+  }
+
+  if (pagedir_is_dirty(evict_thread->pagedir, evict_page->vaddr) || 
+      evict_page->type == PAGE_SWAP)
+  {
+    // TODO: if MMAP
+    /* move to swap */
+    evict_page->type = PAGE_SWAP;
+    evict_page->swap_id = swap_out(evict_frame->addr);
+  }
+
+  /* clear page, frame */
+  evict_page->loaded = false;
+
+  pagedir_clear_page(evict_thread->pagedir, evict_page->vaddr);
+  palloc_free_page(evict_frame->addr);
+
+  hash_delete(&frame_table, &evict_frame->hash_elem);
+  free(evict_frame);
+
+  return palloc_get_page(flags);
 }
