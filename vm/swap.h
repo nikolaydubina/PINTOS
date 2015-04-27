@@ -4,10 +4,10 @@
 #include <stdlib.h>
 #include "devices/disk.h"
 #include "kernel/bitmap.h"
-#include "vm/frame.h"
-#include "vm/page.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 
 #define MAX_PAGES 1000
 #define SECTORS_PER_PAGE (PGSIZE / DISK_SECTOR_SIZE)

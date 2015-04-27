@@ -112,7 +112,7 @@ bool grow_stack(void* vaddr){
   new_page->loaded = true;
   new_page->pinned = !intr_context();
   //new_page->type = PAGE_SWAP;
-  new_page->swapid = BITMAP_ERROR;
+  new_page->swap_id = BITMAP_ERROR;
 
   new_page->paddr = frame_create(PAL_USER, new_page);
   
@@ -145,7 +145,7 @@ bool page_insert(void* vaddr, void* paddr, bool writable){
   new_page->loaded = true;
   new_page->pinned = !intr_context();
   //new_page->type = PAGE_SWAP;
-  new_page->swapid = BITMAP_ERROR;
+  new_page->swap_id = BITMAP_ERROR;
 
   if (new_page->vaddr == NULL){
     free(new_page);
