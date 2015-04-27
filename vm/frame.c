@@ -1,12 +1,5 @@
 #include "vm/frame.h"
 
-/* frame descriptor */
-static struct frame{
-  void* addr;                 /* Frame address */
-  struct page* page;          /* Pointer to Page descriptor */
-  struct hash_elem hash_elem; /* for frame_table */
-};
-
 /* global variables */
 static struct lock frame_table_lock;
 static struct hash frame_table;
@@ -54,10 +47,10 @@ void* frame_create(enum palloc_flags flags, struct page* page){
     frame_insert(addr, page);
   else{
     /* frame eviction */
-    while (!addr){
-      addr = frame_evict(flags);
-      lock_release(&frame_table_lock);
-    }
+    //while (!addr){
+    //  addr = frame_evict(flags);
+    //  lock_release(&frame_table_lock);
+    //}
     
     // DEBUG
     if (!addr)
@@ -96,7 +89,7 @@ void frame_free(void* addr){
   lock_release(&frame_table_lock);
 }
 
-void* frame_evict(enum pallog_flags flags){
+void* frame_evict(enum palloc_flags flags){
   // TODO: code it
 
   return NULL;

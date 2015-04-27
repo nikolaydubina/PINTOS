@@ -26,7 +26,7 @@ struct page{
   bool loaded;          /* ready for read/write */
   bool pinned;          /* must not be evicted */
 
-  size_t swapid;        /* id of page in swap disk */
+  size_t swap_id;       /* id of page in swap disk */
 
   enum page_type type;
 
