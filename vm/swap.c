@@ -12,6 +12,8 @@ void swap_init(){
 
   /* disk init */
   disk = disk_get(1, 1);
+  if (disk == NULL)
+    PANIC("CANT INITIALIZE SWAP!\n");
 }
 
 /* move frame from swap */
