@@ -70,6 +70,8 @@ void frame_insert(void* addr, struct page* page){
   new_frame->addr = addr;
   new_frame->page = page;
 
+  page->frame = new_frame;
+
   hash_insert(&frame_table, &new_frame->hash_elem);
 }
 
@@ -144,7 +146,7 @@ void* frame_evict(enum palloc_flags flags){
     evict_page->type = PAGE_SWAP;
     evict_page->loaded = false;
     evict_page->pinned = false;
-    evict_page->swap_id = swap_out(evict_frame);
+    evict_page->swap_id = swap_out(evict_page);
   }
 
   /* clear page, frame */
