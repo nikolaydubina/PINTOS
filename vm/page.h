@@ -10,7 +10,7 @@
 #include "threads/palloc.h"
 #include "kernel/bitmap.h"
 
-#define MAX_STACK (8 * (1 << 20)) /* 4MB */
+#define MAX_STACK (8 * (1 << 20)) /* 8MB */
 
 enum page_type{
   PAGE_FILE,
@@ -50,5 +50,6 @@ bool page_insert(void* vaddr, void* paddr, bool writable);
 
 bool load_page(struct page* page);
 bool grow_stack(void* vaddr);
+bool grow_stack_writable(void* vaddr, bool writable);
 
 #endif // VM_PAGE

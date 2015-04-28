@@ -38,7 +38,6 @@ static struct frame* frame_lookup(const void *address){
 
 /* create new frame slot */
 void* frame_create(enum palloc_flags flags, struct page* page){
-
   if ((flags & PAL_USER) == 0)
     return NULL;
 
@@ -49,15 +48,15 @@ void* frame_create(enum palloc_flags flags, struct page* page){
     frame_insert(addr, page);
   else{
     /* frame eviction */
-    while (!addr){
-      addr = frame_evict(flags);
+    while (addr == NULL){
       lock_release(&frame_table_lock);
+      addr = frame_evict(flags);
     }
     
-    // DEBUG
-    if (!addr)
+    if (addr == NULL)
       PANIC ("Frame was not evicted properly");
-
+    
+    lock_acquire(&frame_table_lock);
     frame_insert(addr, page);
   }
   lock_release(&frame_table_lock);
@@ -92,7 +91,6 @@ void frame_free(void* addr){
 }
 
 void* frame_evict(enum palloc_flags flags){
-  lock_acquire(&frame_table_lock);
 
   struct frame* evict_frame = NULL;
   struct page* evict_page = NULL;
@@ -100,34 +98,53 @@ void* frame_evict(enum palloc_flags flags){
 
   /* busy waiting for frame to evict */
   struct hash_iterator e;
-  hash_first(&e, &frame_table);
-  while(evict_frame == NULL){
+  bool same_round = false;
+  while (evict_frame == NULL){
+    /* if start of traversal, then reset */
+    if (!same_round){
+      lock_acquire(&frame_table_lock);
+      hash_first(&e, &frame_table);
+      same_round = true;
+
+      /* accessing REAL first element. damn hashmap */
+      if (!hash_next(&e)){
+        same_round = false;
+        lock_release(&frame_table_lock);
+        continue;
+      }
+    }
     struct frame* curr_frame = hash_entry(hash_cur(&e), struct frame, hash_elem);
     struct page* curr_page = curr_frame->page;
 
-    if (!curr_frame->page->pinned){
-        struct thread *pthread = curr_page->thread;
+    if(!curr_page->pinned){
+      struct thread *pthread = curr_page->thread;
 
-        if (pagedir_is_accessed(pthread->pagedir, curr_page->vaddr))
-          pagedir_set_accessed(pthread->pagedir, curr_page->vaddr, false);
-        else{
-          evict_frame = curr_frame;
-          evict_page = curr_page;
-          evict_thread = pthread;
-        }
+      if (pagedir_is_accessed(pthread->pagedir, curr_page->vaddr))
+        pagedir_set_accessed(pthread->pagedir, curr_page->vaddr, false);
+      else{
+        evict_frame = curr_frame;
+        evict_page = curr_page;
+        evict_thread = pthread;
+        lock_release(&frame_table_lock);
+      }
     }
 
-    if (!hash_next(&e))
-      hash_first(&e, &frame_table);
+    /* continue or reset traversal */
+    if (!hash_next(&e)){
+      same_round = false;
+      lock_release(&frame_table_lock);
+    }
   }
 
+  lock_acquire(&frame_table_lock);
   if (pagedir_is_dirty(evict_thread->pagedir, evict_page->vaddr) || 
       evict_page->type == PAGE_SWAP)
   {
-    // TODO: if MMAP
     /* move to swap */
     evict_page->type = PAGE_SWAP;
-    evict_page->swap_id = swap_out(evict_frame->addr);
+    evict_page->loaded = false;
+    evict_page->pinned = false;
+    evict_page->swap_id = swap_out(evict_frame);
   }
 
   /* clear page, frame */
@@ -138,6 +155,7 @@ void* frame_evict(enum palloc_flags flags){
 
   hash_delete(&frame_table, &evict_frame->hash_elem);
   free(evict_frame);
+  lock_release(&frame_table_lock);
 
   return palloc_get_page(flags);
 }
