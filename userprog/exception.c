@@ -153,7 +153,7 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   bool success = false;
-  if (not_present && fault_addr > USER_VADDR_MIN &&
+  if (user && not_present && fault_addr > USER_VADDR_MIN &&
       is_user_vaddr(fault_addr)){
       struct page* curr_page = page_get(fault_addr);
 
@@ -173,7 +173,7 @@ page_fault (struct intr_frame *f)
        body, and replace it with code that brings in the page to
        which fault_addr refers. */
     printf ("Page fault at %p: %s error %s page in %s context.\n",
-            fault_addr,
+            (void*)fault_addr,
             not_present ? "not present" : "rights violation",
             write ? "writing" : "reading",
             user ? "user" : "kernel");

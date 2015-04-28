@@ -11,7 +11,6 @@ void swap_init(){
   bitmap_set_all(swap_slots, SWAP_FREE);
 
   /* disk init */
-  //disk_init();
   disk = disk_get(1, 1);
 }
 
