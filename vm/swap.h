@@ -17,8 +17,8 @@
 
 void swap_init(void);
 
-void swap_in(struct frame* frame);
-void swap_out(struct frame* frame);
+void swap_in(struct page* page);
+void swap_out(struct page* page);
 
 #endif // VM_SWAP
 

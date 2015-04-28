@@ -27,6 +27,8 @@ struct page{
   bool pinned;            /* must not be evicted */
 
   size_t swap_id;         /* id of page in swap disk */
+
+  struct frame* frame;    /* corresponding frame */
   
   struct thread* thread;  /* for frame viction */ 
 

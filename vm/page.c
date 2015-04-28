@@ -200,6 +200,18 @@ bool page_insert(void* vaddr, void* paddr, bool writable){
 static bool load_swap(struct page* page){
   bool success = false;
 
+  if (page == NULL)
+    return false;
+
+  if (page->swap_id == BITMAP_ERROR)
+    return false;
+
+  page->loaded = true;
+  page->pinned = !intr_context();
+  page->paddr = frame_create(PAL_USER, page);
+
+  swap_in(page);
+
   success = true;
 
   return success;

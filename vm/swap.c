@@ -17,11 +17,11 @@ void swap_init(){
 }
 
 /* move frame from swap */
-void swap_in(struct frame* frame){
+void swap_in(struct page* page){
   lock_acquire(&swap_lock);
 
   /* chekc if it was swapped in before */
-  size_t page_index = frame->page->swap_id;
+  size_t page_index = page->swap_id;
   if (page_index == BITMAP_ERROR)
     return;
 
@@ -35,13 +35,13 @@ void swap_in(struct frame* frame){
   int i;
   for(i = 0; i < SECTORS_PER_PAGE; ++i)
     disk_read(disk, page_index * SECTORS_PER_PAGE + i,
-              frame->addr + i * DISK_SECTOR_SIZE);
+              page->paddr + i * DISK_SECTOR_SIZE);
 
   lock_release(&swap_lock);
 }
 
 /* move frame to swap */
-void swap_out(struct frame* frame){
+void swap_out(struct page* page){
   lock_acquire(&swap_lock);
   
   /* lookup free slot */
@@ -50,13 +50,13 @@ void swap_out(struct frame* frame){
   if (free_index == BITMAP_ERROR)
     PANIC("SWAP IS FULL!");
 
-  frame->page->swap_id = free_index;
+  page->swap_id = free_index;
 
   /* move page to swap */
   int i;
   for (i = 0; i < SECTORS_PER_PAGE; ++i)
     disk_write(disk, free_index * SECTORS_PER_PAGE + i, 
-               frame->addr + i * DISK_SECTOR_SIZE);
+               page->paddr + i * DISK_SECTOR_SIZE);
 
   lock_release(&swap_lock);
 }
