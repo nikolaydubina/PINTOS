@@ -94,7 +94,6 @@ main (void)
   /* Initialize Virtual memory structures */
   frame_init();
   page_init();
-  swap_init();
 
   /* Segmentation. */
 #ifdef USERPROG
@@ -123,6 +122,9 @@ main (void)
   disk_init ();
   filesys_init (format_filesys);
 #endif
+  
+  /* swap should be after dick initialization for swap disk */
+  swap_init();
 
   printf ("Boot complete.\n");
   
