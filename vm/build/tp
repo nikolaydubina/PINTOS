@@ -4,5 +4,5 @@ make all
 pintos -v -k -T 60 --qemu  --fs-disk=2 \
        -p tests/vm/$1 \
        -a $1 \
-       --swap-disk=4 \
+       --swap-disk=9 \
        -- -q -f run $1;

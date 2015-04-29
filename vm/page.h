@@ -19,6 +19,8 @@ enum page_type{
 };
 
 struct page{
+  enum page_type type;
+
   void* vaddr;            /* page,  user,   address */
   void* paddr;            /* frame, kernel, address */
 
@@ -29,8 +31,11 @@ struct page{
   struct frame* frame;    /* corresponding frame */
   struct thread* thread;  /* for frame viction */ 
   size_t swap_id;         /* id of page in swap disk */
-
-  enum page_type type;
+ 
+  /* PAGE_FILE */
+  struct file* file;
+  size_t read_bytes;
+  size_t zero_bytes;
 
   struct hash_elem hash_elem;
 };
@@ -46,10 +51,11 @@ void page_construct(void);
 void page_destruct(void);
 
 struct page* page_get(void* addr);
-bool page_insert(void* vaddr, void* paddr, bool writable);
+bool page_insert_file(struct file* file, void* vaddr, 
+                      size_t page_read_bytes, size_t page_zero_bytes,
+                      bool writable);
 
 bool load_page(struct page* page);
 bool grow_stack(void* vaddr);
-bool grow_stack_writable(void* vaddr, bool writable);
 
 #endif // VM_PAGE

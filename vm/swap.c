@@ -6,10 +6,11 @@ struct disk* disk;
 
 void swap_init(){
   disk = disk_get(1, 1);
-
   ASSERT(disk != NULL);
 
   swap_slots = bitmap_create(disk_size(disk) / SECTORS_PER_PAGE);
+  //printf("DEBUG: disk_size:%d\n", disk_size(disk) / SECTORS_PER_PAGE);
+  //printf("DEBUG: swap_size:%d\n", disk_size(disk) / SECTORS_PER_PAGE * PGSIZE);
 
   bitmap_set_all(swap_slots, SWAP_FREE);
   lock_init(&swap_lock);
@@ -18,6 +19,7 @@ void swap_init(){
 /* move frame from swap */
 void swap_in(struct page* page){
   ASSERT(page != NULL);
+
   lock_acquire(&swap_lock);
 
   size_t page_index = page->swap_id;
@@ -55,4 +57,3 @@ void swap_out(struct page* page){
 
   lock_release(&swap_lock);
 }
-
