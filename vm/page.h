@@ -36,6 +36,7 @@ struct page{
   struct file* file;
   size_t read_bytes;
   size_t zero_bytes;
+  off_t ofs;
 
   struct hash_elem hash_elem;
 };
@@ -53,7 +54,7 @@ void page_destruct(void);
 struct page* page_get(void* addr);
 bool page_insert_file(struct file* file, void* vaddr, 
                       size_t page_read_bytes, size_t page_zero_bytes,
-                      bool writable);
+                      bool writable, off_t ofs);
 
 bool load_page(struct page* page);
 bool grow_stack(void* vaddr);
