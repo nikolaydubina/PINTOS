@@ -172,8 +172,6 @@ page_fault (struct intr_frame *f)
       }
       else if (is_stack_access(fault_addr, f->esp))
         success = grow_stack(fault_addr);
-      else
-        success = grow_stack_writable(fault_addr, false);
   }
   if (!success){
     /* To implement virtual memory, delete the rest of the function

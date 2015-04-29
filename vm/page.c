@@ -7,6 +7,7 @@
 #include <stdio.h>
 
 static bool load_swap(struct page* page);
+static bool load_file(struct page* page);
 
 /* helper routines */
 static struct page* page_lookup(const void *address);
@@ -45,6 +46,9 @@ bool load_page(struct page* page){
       case PAGE_SWAP:
         success = load_swap(page);
         break;
+      case PAGE_FILE:
+        success = load_file(page);
+        break;
     }
 
   if (success)
@@ -69,27 +73,58 @@ static bool load_swap(struct page* page){
   return true;
 }
 
+/* allocates fream and loads page from file there */
+static bool load_file(struct page* page){
+  ASSERT(page->type == PAGE_FILE);
+
+  page->paddr       = frame_create(PAL_USER, page);
+
+  page->loaded      = true;
+  page->pinned      = !intr_context();
+  page->type        = PAGE_SWAP;
+  page->swap_id     = BITMAP_ERROR;
+  
+  if (page->vaddr == NULL){
+    free(page);
+    return false;
+  }
+
+  /* install page */
+  if (!install_page(page->vaddr, page->paddr, page->writable)){
+    frame_free(page->paddr);
+    free(page);
+    return false;
+  }
+
+  if (file_read(page->file, page->paddr, page->read_bytes) != (int)page->read_bytes){
+    palloc_free_page(page->paddr);
+    return false; 
+  }
+
+  memset(page->paddr + page->read_bytes, 0, page->zero_bytes);
+
+  return true;
+}
+
 /* adds new page that covers passed virtual address
  * called in: page_fault, setup_stack, correct_pointer */
 bool grow_stack(void* vaddr){
-  //printf("DEBUG: grow_stack: vaddr=%p\n", vaddr);
   struct page* new_page = malloc(sizeof(struct page));
   
-  //printf("DEBUG: grow_stack: before install\n");
   /* check address validity */
   if ((PHYS_BASE - pg_round_down(vaddr)) > MAX_STACK)
     return false;
 
   /* check frame */
-  new_page->vaddr = pg_round_down(vaddr);   /* rounding down to nearest page */
-  new_page->writable = true;
-  new_page->loaded = true;
-  new_page->pinned = !intr_context();
-  new_page->type = PAGE_SWAP;
-  new_page->swap_id = BITMAP_ERROR;
-  new_page->thread = thread_current();
+  new_page->vaddr       = pg_round_down(vaddr);   /* rounding down to nearest page */
+  new_page->paddr       = frame_create(PAL_USER, new_page);
 
-  new_page->paddr = frame_create(PAL_USER, new_page);
+  new_page->writable    = true;
+  new_page->loaded      = true;
+  new_page->pinned      = !intr_context();
+  new_page->type        = PAGE_SWAP;
+  new_page->swap_id     = BITMAP_ERROR;
+  new_page->thread      = thread_current();
   
   if (new_page->vaddr == NULL){
     free(new_page);
@@ -106,68 +141,31 @@ bool grow_stack(void* vaddr){
   return (hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL);
 }
 
-/* adds new page that covers passed virtual address
- * called in: page_fault, setup_stack, correct_pointer */
-bool grow_stack_writable(void* vaddr, bool writable){
+/* inserts page. not loads yet. */
+bool page_insert_file(struct file* file, void* vaddr, 
+                      size_t page_read_bytes, size_t page_zero_bytes, bool writable)
+{
   struct page* new_page = malloc(sizeof(struct page));
   
-  // TODO: adde check for address
-  
-  /* check frame */
-  new_page->vaddr = pg_round_down(vaddr);   /* rounding down to nearest page */
-  new_page->writable = writable;
-  new_page->loaded = true;
-  new_page->pinned = false;
-  new_page->type = PAGE_SWAP;
-  new_page->swap_id = BITMAP_ERROR;
-  new_page->thread = thread_current();
-
-  new_page->paddr = frame_create(PAL_USER, new_page);
-  //new_page->paddr = NULL;
-  
-  if (new_page->vaddr == NULL){
-    free(new_page);
-    return false;
-  }
-
-  /* install page */
-  if (!install_page(new_page->vaddr, new_page->paddr, new_page->writable)){
-    frame_free(new_page->paddr);
-    free(new_page);
-    return false;
-  }
- 
-  return (hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL);
-}
-
-/* called in process -> load -> load_segment */
-bool page_insert(void* vaddr, void* paddr, bool writable){
-  if (!is_user_vaddr(vaddr) || !is_kernel_vaddr(paddr))
-    return false;
-
-  struct page* new_page = malloc(sizeof(struct page));
+  /* check address validity */
+  //if ((PHYS_BASE - pg_round_down(vaddr)) > MAX_STACK)
+  //  return false;
 
   /* check frame */
-  new_page->vaddr = pg_round_down(vaddr);   /* rounding down to nearest page */
-  new_page->paddr = paddr;                  /* FIXME raw because of ad-hoc load_segment */
-  new_page->writable = writable;
-  new_page->loaded = true;
-  new_page->pinned = !intr_context();
-  new_page->type = PAGE_SWAP;
-  new_page->swap_id = BITMAP_ERROR;
-  new_page->thread = thread_current();
+  new_page->vaddr       = pg_round_down(vaddr);   /* rounding down to nearest page */
+  new_page->paddr       = NULL;
 
-  if (new_page->vaddr == NULL){
-    free(new_page);
-    return false;
-  }
+  new_page->writable    = writable;
+  new_page->loaded      = false;
+  new_page->pinned      = false;
+  new_page->type        = PAGE_FILE;
+  new_page->swap_id     = BITMAP_ERROR;
+  new_page->thread      = thread_current();
 
-  /* install page */
-  if (!install_page(new_page->vaddr, new_page->paddr, new_page->writable)){
-    frame_free(new_page->paddr);
-    free(new_page);
-    return false;
-  }
+  /* PAGE_FILE */
+  new_page->file        = file;
+  new_page->read_bytes  = page_read_bytes;
+  new_page->zero_bytes  = page_zero_bytes;
   
   return (hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL);
 }
