@@ -9,7 +9,6 @@
 #include "vm/frame.h"
 #include "vm/page.h"
 
-#define MAX_PAGES 1000
 #define SECTORS_PER_PAGE (PGSIZE / DISK_SECTOR_SIZE)
 
 #define SWAP_FREE 0

@@ -20,6 +20,7 @@ void frame_init(){
 
 /* create new frame slot */
 void* frame_create(enum palloc_flags flags, struct page* page){
+  //printf("DEBUG: fram_create: page=%p, uaddr=%p)\n", page, page->vaddr);
   if ((flags & PAL_USER) == 0)
     return NULL;
 
