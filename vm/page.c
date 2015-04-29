@@ -96,6 +96,7 @@ static bool load_file(struct page* page){
     return false;
   }
 
+  file_seek(page->file, page->ofs);
   if (file_read(page->file, page->paddr, page->read_bytes) != (int)page->read_bytes){
     palloc_free_page(page->paddr);
     return false; 
@@ -142,8 +143,8 @@ bool grow_stack(void* vaddr){
 }
 
 /* inserts page. not loads yet. */
-bool page_insert_file(struct file* file, void* vaddr, 
-                      size_t page_read_bytes, size_t page_zero_bytes, bool writable)
+bool page_insert_file(struct file* file, void* vaddr, size_t page_read_bytes, 
+                      size_t page_zero_bytes, bool writable, off_t ofs)
 {
   struct page* new_page = malloc(sizeof(struct page));
   
@@ -166,6 +167,7 @@ bool page_insert_file(struct file* file, void* vaddr,
   new_page->file        = file;
   new_page->read_bytes  = page_read_bytes;
   new_page->zero_bytes  = page_zero_bytes;
+  new_page->ofs         = ofs;
   
   return (hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL);
 }

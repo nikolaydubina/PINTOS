@@ -166,7 +166,7 @@ page_fault (struct intr_frame *f)
         }
         else{
           success = load_page(curr_page);
-          //printf("loaded: %p page: %p result: %s\n", curr_page->vaddr, curr_page, success ? "T" : "F");
+          //printf("loaded: %p page: %p result: %s\n", curr_page->paddr, curr_page, success ? "T" : "F");
           curr_page->pinned = false;    // TODO: WHY?
         }
       }
