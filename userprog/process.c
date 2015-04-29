@@ -538,7 +538,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* Get a page of memory. */
-      //uint8_t *kpage = palloc_get_page (PAL_USER);
       grow_stack_writable(upage, writable);
       struct page* new_page = page_get(upage);
       uint8_t* kpage = new_page->paddr;
@@ -551,17 +550,12 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-      /* Add the page to the process's address space. */
-      //if (!page_insert(upage, kpage, writable)){
-      //    palloc_free_page (kpage);
-      //    return false; 
-      //}
-
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
     }
+  //printf("DEBUG: finish load segments\n");
   return true;
 }
 

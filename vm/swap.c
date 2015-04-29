@@ -5,29 +5,24 @@ struct bitmap* swap_slots;
 struct disk* disk;
 
 void swap_init(){
-  lock_init(&swap_lock);
-  swap_slots = bitmap_create(MAX_PAGES * SECTORS_PER_PAGE);
+  disk = disk_get(1, 1);
+
+  ASSERT(disk != NULL);
+
+  swap_slots = bitmap_create(disk_size(disk) / SECTORS_PER_PAGE);
 
   bitmap_set_all(swap_slots, SWAP_FREE);
-
-  /* disk init */
-  disk = disk_get(1, 1);
-  if (disk == NULL)
-    PANIC("CANT INITIALIZE SWAP!\n");
+  lock_init(&swap_lock);
 }
 
 /* move frame from swap */
 void swap_in(struct page* page){
+  ASSERT(page != NULL);
   lock_acquire(&swap_lock);
 
-  /* chekc if it was swapped in before */
   size_t page_index = page->swap_id;
-  if (page_index == BITMAP_ERROR)
-    return;
-
-  /* checking disk access */
-  if (bitmap_test(swap_slots, page_index) == SWAP_FREE)
-    PANIC("TRYING TO SWAP FROM FREE LOCATION");
+  ASSERT(page_index != BITMAP_ERROR);
+  ASSERT(bitmap_test(swap_slots, page_index) == SWAP_USED);
 
   bitmap_flip(swap_slots, page_index);
 
@@ -42,13 +37,13 @@ void swap_in(struct page* page){
 
 /* move frame to swap */
 void swap_out(struct page* page){
+  ASSERT(page != NULL);
+
   lock_acquire(&swap_lock);
   
-  /* lookup free slot */
+ /* lookup free slot */
   size_t free_index = bitmap_scan_and_flip(swap_slots, 0, 1, SWAP_FREE);
-
-  if (free_index == BITMAP_ERROR)
-    PANIC("SWAP IS FULL!");
+  ASSERT(free_index != BITMAP_ERROR);
 
   page->swap_id = free_index;
 
