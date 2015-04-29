@@ -126,6 +126,8 @@ kill (struct intr_frame *f)
 static void
 page_fault (struct intr_frame *f) 
 {
+  static int count = 0;
+  printf("pagefault# %d\n", count++);
   bool not_present;  /* True: not-present page, false: writing r/o page. */
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */
@@ -153,20 +155,27 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   bool success = false;
-  if (user && not_present && fault_addr > USER_VADDR_MIN &&
+  if (not_present && fault_addr > USER_VADDR_MIN &&
       is_user_vaddr(fault_addr)){
       struct page* curr_page = page_get(fault_addr);
 
+      printf("falut: in handler\n");
       if (curr_page != NULL){
-        if (write && !curr_page->writable)
+        printf("page is found: %p\n", curr_page);
+        if (write && !curr_page->writable){
+          printf("fault: want write, but cant\n");
           success = false;
+        }
         else{
           success = load_page(curr_page);
+          printf("loaded: %p page: %p result: %s\n", curr_page->vaddr, curr_page, success ? "T" : "F");
           curr_page->pinned = false;    // TODO: WHY?
         }
       }
       else if (is_stack_access(fault_addr, f->esp))
         success = grow_stack(fault_addr);
+      else
+        success = grow_stack(fault_addr); // TODO: THIS IS NOT RIGHT. ROUSTNESS WILL FAIL! FIXME
   }
   if (!success){
     /* To implement virtual memory, delete the rest of the function
