@@ -26,11 +26,9 @@ struct page{
   bool loaded;            /* ready for read/write */
   bool pinned;            /* must not be evicted */
 
-  size_t swap_id;         /* id of page in swap disk */
-
   struct frame* frame;    /* corresponding frame */
-  
   struct thread* thread;  /* for frame viction */ 
+  size_t swap_id;         /* id of page in swap disk */
 
   enum page_type type;
 

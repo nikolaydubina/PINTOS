@@ -22,7 +22,6 @@ struct frame{
 
 void frame_init(void);
 void* frame_create(enum palloc_flags flags, struct page* page);
-void frame_insert(void* addr, struct page* page);
 void frame_free(void* addr);
 
 #endif // VM_FRAME

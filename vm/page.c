@@ -13,9 +13,7 @@ static bool page_less(const struct hash_elem *a_, const struct hash_elem *b_, vo
 
 static bool load_swap(struct page* page);
 
-void page_init(void){
-;
-}
+void page_init(void){;}
 
 /* initialize page table - per thread */
 void page_construct(void){
@@ -142,7 +140,7 @@ bool grow_stack_writable(void* vaddr, bool writable){
   /* check frame */
   new_page->vaddr = pg_round_down(vaddr);   /* rounding down to nearest page */
   new_page->writable = writable;
-  new_page->loaded = false;
+  new_page->loaded = true;
   new_page->pinned = false;
   new_page->type = PAGE_SWAP;
   new_page->swap_id = BITMAP_ERROR;
@@ -165,6 +163,7 @@ bool grow_stack_writable(void* vaddr, bool writable){
  
   return (hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL);
 }
+
 /* called in process -> load -> load_segment */
 bool page_insert(void* vaddr, void* paddr, bool writable){
   if (!is_user_vaddr(vaddr) || !is_kernel_vaddr(paddr))
@@ -204,15 +203,16 @@ static bool load_swap(struct page* page){
     return false;
 
   if (page->swap_id == BITMAP_ERROR)
-    return false;
+    PANIC("PAGE WAS NOT SWAPPED OUT!\n");
 
-  page->loaded = true;
-  page->pinned = !intr_context();
   page->paddr = frame_create(PAL_USER, page);
 
   swap_in(page);
+  page->loaded = true;
 
   success = true;
+
+  install_page(page->vaddr, page->paddr, page->writable);
 
   return success;
 }
