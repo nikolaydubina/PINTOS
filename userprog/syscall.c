@@ -47,7 +47,7 @@ struct file_descr{
 
 /* NOTE: process.c - load() uses filesys_open */
 struct list opened_files;
-struct lock opened_files_lock;
+//struct lock opened_files_lock;
 
 void syscall_init (void){
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");

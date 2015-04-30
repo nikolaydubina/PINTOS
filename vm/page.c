@@ -1,6 +1,7 @@
 #include "vm/page.h"
 #include "vm/frame.h"
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #include "threads/vaddr.h"
 
 #include <stdlib.h>
@@ -54,20 +55,22 @@ bool load_page(struct page* page){
   return success;
 }
 
+/* load page from swap */
 static bool load_swap(struct page* page){
   ASSERT(page != NULL);
   ASSERT(page->swap_id != BITMAP_ERROR);
   ASSERT(page->type == PAGE_SWAP);
 
   page->paddr = frame_create(PAL_USER, page);
+  swap_in(page);
 
   if (!install_page(page->vaddr, page->paddr, page->writable)){
     frame_free(page->paddr);
     return false;
   }
 
-  swap_in(page);
   page->loaded = true;
+
   return true;
 }
 
@@ -78,7 +81,7 @@ static bool load_file(struct page* page){
 
   page->paddr       = frame_create(PAL_USER, page);
 
-  page->pinned      = !intr_context();
+  page->pinned      = !intr_context();    // TODO: WHY?
   page->type        = PAGE_SWAP;
   page->swap_id     = BITMAP_ERROR;
   
@@ -94,10 +97,14 @@ static bool load_file(struct page* page){
     return false;
   }
 
-  if (file_read_at(page->file, page->paddr, page->read_bytes, page->ofs) != (int)page->read_bytes){
+  /* reading from file to paddr, synchronizing with syscalls */
+  lock_acquire(&opened_files_lock);
+  if (file_read_at(page->file, page->paddr, page->read_bytes, page->ofs) != (int)page->read_bytes)
+  {
     palloc_free_page(page->paddr);
     return false; 
   }
+  lock_release(&opened_files_lock);
 
   memset(page->paddr + page->read_bytes, 0, page->zero_bytes);
 
@@ -147,8 +154,8 @@ bool page_insert_file(struct file* file, void* vaddr, size_t page_read_bytes,
   struct page* new_page = malloc(sizeof(struct page));
   
   /* check address validity */
-  //if ((PHYS_BASE - pg_round_down(vaddr)) > MAX_STACK)
-  //  return false;
+  if ((PHYS_BASE - pg_round_down(vaddr)) > MAX_STACK)
+    return false;
 
   /* check frame */
   new_page->vaddr       = pg_round_down(vaddr);   /* rounding down to nearest page */
@@ -195,7 +202,7 @@ static struct page* page_lookup(const void *vaddress){
   struct hash_elem *e;
   struct hash* page_table = &(thread_current()->page_table->table);
 
-  p.vaddr = (void*)vaddress;
+  p.vaddr = pg_round_down((void*)vaddress);
   e = hash_find(page_table, &p.hash_elem);
   return e != NULL ? hash_entry(e, struct page, hash_elem) : NULL;
 }

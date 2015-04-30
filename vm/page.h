@@ -13,9 +13,9 @@
 #define MAX_STACK (8 * (1 << 20)) /* 8MB */
 
 enum page_type{
-  PAGE_FILE,
   PAGE_SWAP,
-  PAGE_MMAP
+  PAGE_FILE
+  //PAGE_MMAP
 };
 
 struct page{
