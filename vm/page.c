@@ -51,15 +51,13 @@ bool load_page(struct page* page){
         break;
     }
 
-  if (success)
-    page->loaded = true;
-
   return success;
 }
 
 static bool load_swap(struct page* page){
   ASSERT(page != NULL);
   ASSERT(page->swap_id != BITMAP_ERROR);
+  ASSERT(page->type == PAGE_SWAP);
 
   page->paddr = frame_create(PAL_USER, page);
 
@@ -75,11 +73,11 @@ static bool load_swap(struct page* page){
 
 /* allocates fream and loads page from file there */
 static bool load_file(struct page* page){
+  ASSERT(page != NULL);
   ASSERT(page->type == PAGE_FILE);
 
   page->paddr       = frame_create(PAL_USER, page);
 
-  page->loaded      = true;
   page->pinned      = !intr_context();
   page->type        = PAGE_SWAP;
   page->swap_id     = BITMAP_ERROR;
@@ -96,14 +94,14 @@ static bool load_file(struct page* page){
     return false;
   }
 
-  file_seek(page->file, page->ofs);
-  if (file_read(page->file, page->paddr, page->read_bytes) != (int)page->read_bytes){
+  if (file_read_at(page->file, page->paddr, page->read_bytes, page->ofs) != (int)page->read_bytes){
     palloc_free_page(page->paddr);
     return false; 
   }
 
   memset(page->paddr + page->read_bytes, 0, page->zero_bytes);
 
+  page->loaded      = true;
   return true;
 }
 
