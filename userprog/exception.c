@@ -157,7 +157,7 @@ page_fault (struct intr_frame *f)
       is_user_vaddr(fault_addr)){
       struct page* curr_page = page_get(fault_addr);
 
-      //printf("falut: in handler\n");
+      //printf("falut: in handler: faddr=%p\n",fault_addr);
       if (curr_page != NULL){
         //printf("page is found: %p\n", curr_page);
         if (write && !curr_page->writable){

@@ -539,6 +539,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* adds page with file descriptor to pagetable. lazy loading file */
       if (!page_insert_file(file, upage, page_read_bytes, page_zero_bytes, writable, ofs))
         return false;
+      
+      /* updating offset */
+      ofs += page_read_bytes;
 
       /* Advance. */
       read_bytes -= page_read_bytes;
