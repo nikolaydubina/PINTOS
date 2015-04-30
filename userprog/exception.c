@@ -153,20 +153,15 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   bool success = false;
-  if (not_present && fault_addr > USER_VADDR_MIN &&
-      is_user_vaddr(fault_addr)){
+  if (not_present && (fault_addr > USER_VADDR_MIN) && is_user_vaddr(fault_addr))
+  {
       struct page* curr_page = page_get(fault_addr);
 
-      //printf("falut: in handler: faddr=%p\n",fault_addr);
       if (curr_page != NULL){
-        //printf("page is found: %p\n", curr_page);
-        if (write && !curr_page->writable){
-          //printf("fault: want write, but cant\n");
+        if (write && !curr_page->writable)
           success = false;
-        }
         else{
           success = load_page(curr_page);
-          //printf("loaded: %p page: %p result: %s\n", curr_page->paddr, curr_page, success ? "T" : "F");
           curr_page->pinned = false;    // TODO: WHY?
         }
       }

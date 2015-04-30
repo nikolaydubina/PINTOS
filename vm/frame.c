@@ -20,7 +20,6 @@ void frame_init(){
 
 /* create new frame slot */
 void* frame_create(enum palloc_flags flags, struct page* page){
-  //printf("DEBUG: fram_create: page=%p, uaddr=%p)\n", page, page->vaddr);
   if ((flags & PAL_USER) == 0)
     return NULL;
 
@@ -79,6 +78,7 @@ static void* frame_evict(enum palloc_flags flags){
         continue;
       }
     }
+
     struct frame* curr_frame = hash_entry(hash_cur(&e), struct frame, hash_elem);
     struct page* curr_page = curr_frame->page;
 
@@ -133,6 +133,8 @@ static void* frame_evict(enum palloc_flags flags){
 
 /* insert new frame with addr and page-descriptor page */
 static void frame_insert(void* addr, struct page* page){
+  ASSERT(page != NULL);
+  
   struct frame* new_frame = malloc(sizeof(struct frame));
   new_frame->addr = addr;
   new_frame->page = page;

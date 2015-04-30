@@ -16,8 +16,8 @@
 
 void swap_init(void);
 
-void swap_in(struct page* page);
-void swap_out(struct page* page);
+void swap_in(const struct page* page);    /* move frame from  swap */
+size_t swap_out(const struct page* page); /* move frame to    swap */
 
 #endif // VM_SWAP
 

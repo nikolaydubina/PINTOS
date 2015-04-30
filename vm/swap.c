@@ -17,8 +17,9 @@ void swap_init(){
 }
 
 /* move frame from swap */
-void swap_in(struct page* page){
+void swap_in(const struct page* page){
   ASSERT(page != NULL);
+  ASSERT(page->paddr != NULL);
 
   lock_acquire(&swap_lock);
 
@@ -32,14 +33,16 @@ void swap_in(struct page* page){
   int i;
   for(i = 0; i < SECTORS_PER_PAGE; ++i)
     disk_read(disk, page_index * SECTORS_PER_PAGE + i,
-              page->paddr + i * DISK_SECTOR_SIZE);
+              (uint8_t*)page->paddr + i * DISK_SECTOR_SIZE);
 
+  //printf("DEBUG: swap_in: %p - %0x\n", page->paddr, *(uint8_t*)page->paddr);
   lock_release(&swap_lock);
 }
 
 /* move frame to swap */
-void swap_out(struct page* page){
+size_t swap_out(const struct page* page){
   ASSERT(page != NULL);
+  ASSERT(page->paddr != NULL);
 
   lock_acquire(&swap_lock);
   
@@ -47,13 +50,14 @@ void swap_out(struct page* page){
   size_t free_index = bitmap_scan_and_flip(swap_slots, 0, 1, SWAP_FREE);
   ASSERT(free_index != BITMAP_ERROR);
 
-  page->swap_id = free_index;
-
   /* move page to swap */
   int i;
   for (i = 0; i < SECTORS_PER_PAGE; ++i)
     disk_write(disk, free_index * SECTORS_PER_PAGE + i, 
-               page->paddr + i * DISK_SECTOR_SIZE);
+               (uint8_t*)page->paddr + i * DISK_SECTOR_SIZE);
 
+  //printf("DEBUG: swap_out: %p - %0x\n", page->paddr, *(uint8_t*)page->paddr);
   lock_release(&swap_lock);
+
+  return free_index;
 }
