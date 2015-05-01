@@ -98,13 +98,13 @@ static bool load_file(struct page* page){
   }
 
   /* reading from file to paddr, synchronizing with syscalls */
-  lock_acquire(&opened_files_lock);
+  //lock_acquire(&opened_files_lock);
   if (file_read_at(page->file, page->paddr, page->read_bytes, page->ofs) != (int)page->read_bytes)
   {
     palloc_free_page(page->paddr);
     return false; 
   }
-  lock_release(&opened_files_lock);
+  //lock_release(&opened_files_lock);
 
   memset(page->paddr + page->read_bytes, 0, page->zero_bytes);
 
