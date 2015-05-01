@@ -47,7 +47,7 @@ struct file_descr{
 
 /* NOTE: process.c - load() uses filesys_open */
 struct list opened_files;
-//struct lock opened_files_lock;
+struct lock opened_files_lock;
 
 void syscall_init (void){
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -55,11 +55,11 @@ void syscall_init (void){
   lock_init(&opened_files_lock);
 }
 
-bool is_stack_access(void* addr, void* esp){
+inline bool is_stack_access(void* addr, void* esp){
   return addr >= esp - STACK_ACCESS_HEURISTIC;
 }
 
-bool correct_address(void* addr, void* esp){
+inline bool correct_address(void* addr, void* esp){
   if (!(is_user_vaddr(addr) && addr > USER_VADDR_MIN && addr != NULL))
     return false;
 
@@ -75,18 +75,34 @@ bool correct_address(void* addr, void* esp){
   return success;
 }
 
-bool correct_buffer(void* p, unsigned n, void* esp, bool write){
-  if (!correct_address(p, esp))
+inline bool correct_buffer(void* p, unsigned n, void* esp, bool write){
+  /* quick check */
+  if (!correct_address(p, esp) ||
+      !correct_address(p + n, esp))
     return false;
 
-  unsigned i;
   bool ret = true;
+  if (write){
+    struct page* curr;
 
-  for(i = 0; i < n && ret; ++i){
-    ret = correct_address(p + i, esp);
-    if (write){
-      struct page* curr = page_get(p);
-      ret = curr->writable;
+    /* first */
+    curr = page_get(p);
+    ret &= curr->writable;
+
+    /* last */
+    curr = page_get(p + n);
+    ret &= curr->writable;
+  }
+
+  /* roboust check */
+  if (ROBUST_BUFFER_CHECK){
+    unsigned i;
+    for(i = 0; i < n && ret; ++i){
+      ret = correct_address(p + i, esp);
+      if (write){
+        struct page* curr = page_get(p);
+        ret &= curr->writable;
+      }
     }
   }
 
@@ -233,9 +249,9 @@ static void syscall_exec(struct intr_frame* f){
     return;
   }
 
-  //lock_acquire(&opened_files_lock);
+  lock_acquire(&opened_files_lock);
   int new_pid = process_execute(cmd_line); // pid == tid
-  //lock_release(&opened_files_lock);
+  lock_release(&opened_files_lock);
 
   if (new_pid == TID_ERROR)
     f->eax = ERROR;
@@ -417,14 +433,12 @@ static void syscall_write(struct intr_frame* f){
 
   int asize =  size < 10000000 ? size : 10000000;
 
+  lock_acquire(&opened_files_lock);
   if (fid == 1){
-    lock_acquire(&opened_files_lock);
     putbuf(buffer, asize);
     f->eax = asize;
-    lock_release(&opened_files_lock);
   }
   else{
-    lock_acquire(&opened_files_lock);
     struct file_descr* fdescr = lookup_file(fid);
 
     if (fdescr == NULL){
@@ -434,8 +448,8 @@ static void syscall_write(struct intr_frame* f){
     }
 
     f->eax = file_write(fdescr->file, buffer, asize);
-    lock_release(&opened_files_lock);
   }
+  lock_release(&opened_files_lock);
 }
 
 /* Change position in a file. */
@@ -519,7 +533,9 @@ static void syscall_close(struct intr_frame* f){
   lock_release(&opened_files_lock);
 }
 
-/* helper function. retrieves file descrtiptor
+/* helper routine */
+
+/* retrieves file descrtiptor
  * from opened files list
  * NOT thread safe */
 static struct file_descr* lookup_file(int fid){

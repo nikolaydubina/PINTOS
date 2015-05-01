@@ -1,8 +1,9 @@
 #include "vm/frame.h"
 
 /* global variables */
-static struct lock frame_table_lock;
 static struct hash frame_table;
+static struct lock frame_table_lock;                /* modify lock */
+static struct semaphore frame_table_evict;          /* for better eviction */
 
 static void* frame_evict(enum palloc_flags flags);
 
@@ -16,6 +17,8 @@ static bool frame_less(const struct hash_elem *a_, const struct hash_elem *b_, v
 void frame_init(){
   lock_init(&frame_table_lock);
   hash_init(&frame_table, frame_hash, frame_less, NULL);
+
+  sema_init(&frame_table_evict, 0);
 }
 
 /* create new frame slot */
@@ -24,6 +27,7 @@ void* frame_create(enum palloc_flags flags, struct page* page){
     return NULL;
 
   lock_acquire(&frame_table_lock);
+  sema_up(&frame_table_evict);
   void* addr = palloc_get_page(flags);
 
   /* frame eviction */
@@ -67,6 +71,9 @@ static void* frame_evict(enum palloc_flags flags){
   while (evict_frame == NULL){
     /* if start of traversal, then reset */
     if (!same_round){
+      /* receiving singal of change */
+      sema_down(&frame_table_evict);
+
       lock_acquire(&frame_table_lock);
       hash_first(&e, &frame_table);
       same_round = true;

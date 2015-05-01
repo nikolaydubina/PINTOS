@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 
+#define ROBUST_BUFFER_CHECK false             /* requires a lot of resoruces */
 #define STACK_ACCESS_HEURISTIC 32             /* 32 bytes */
 #define USER_VADDR_MIN ((void *) 0x08048000)  /* ??? */
 
