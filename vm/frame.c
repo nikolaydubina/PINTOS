@@ -53,8 +53,6 @@ void frame_free(void* addr){
   if (f != NULL){
     hash_delete(&frame_table, &f->hash_elem);
     free(f);
-    // FIXME: Why following causes fault?
-    //palloc_free_page(addr);
   }
 
   lock_release(&frame_table_lock);
@@ -65,57 +63,46 @@ static void* frame_evict(enum palloc_flags flags){
   struct page* evict_page = NULL;
   struct thread* evict_thread = NULL;
 
-  /* busy waiting for frame to evict */
+  /* looking for frame to evict */
+  bool found = false;
   struct hash_iterator e;
-  bool same_round = false;
-  while (evict_frame == NULL){
-    /* if start of traversal, then reset */
-    if (!same_round){
-      /* receiving singal of change */
-      sema_down(&frame_table_evict);
+  while (!found){
+    /* receiving singal of change in frame table */
+    sema_down(&frame_table_evict);
 
-      lock_acquire(&frame_table_lock);
-      hash_first(&e, &frame_table);
-      same_round = true;
+    /* checking all frames */
+    lock_acquire(&frame_table_lock);
 
-      /* accessing REAL first element. damn hashmap */
-      if (!hash_next(&e)){
-        same_round = false;
-        lock_release(&frame_table_lock);
-        continue;
+    hash_first(&e, &frame_table);
+    while (hash_next(&e) && !found){
+      struct frame* curr_frame = hash_entry(hash_cur(&e), struct frame, hash_elem);
+      struct page* curr_page = curr_frame->page;
+
+      if (!curr_page->pinned){
+        struct thread *pthread = curr_page->thread;
+
+        /* second chanse algorithm. LRU approximation */
+        if (pagedir_is_accessed(pthread->pagedir, curr_page->vaddr))
+          pagedir_set_accessed(pthread->pagedir, curr_page->vaddr, false);
+        else{
+          found = true;
+          evict_frame = curr_frame;
+          evict_page = curr_page;
+          evict_thread = pthread;
+        }
       }
     }
 
-    struct frame* curr_frame = hash_entry(hash_cur(&e), struct frame, hash_elem);
-    struct page* curr_page = curr_frame->page;
-
-    if(!curr_page->pinned){
-      struct thread *pthread = curr_page->thread;
-
-      /* TODO: second change algorithm. LRU approximation */
-      if (pagedir_is_accessed(pthread->pagedir, curr_page->vaddr))
-        pagedir_set_accessed(pthread->pagedir, curr_page->vaddr, false);
-      else{
-        evict_frame = curr_frame;
-        evict_page = curr_page;
-        evict_thread = pthread;
-        lock_release(&frame_table_lock);
-      }
-    }
-
-    /* continue or reset traversal */
-    if (!hash_next(&e)){
-      same_round = false;
-      lock_release(&frame_table_lock);
-    }
+    lock_release(&frame_table_lock);
   }
 
+  /* evicting frame */
   lock_acquire(&frame_table_lock);
 
+  /* move to swap if was accessed before */
   if (pagedir_is_dirty(evict_thread->pagedir, evict_page->vaddr) || 
       evict_page->type == PAGE_SWAP)
   {
-    /* move to swap */
     evict_page->type = PAGE_SWAP;
     evict_page->loaded = false;
     evict_page->pinned = false;
