@@ -85,6 +85,7 @@ static void* frame_evict(enum palloc_flags flags){
     if(!curr_page->pinned){
       struct thread *pthread = curr_page->thread;
 
+      /* TODO: second change algorithm. LRU approximation */
       if (pagedir_is_accessed(pthread->pagedir, curr_page->vaddr))
         pagedir_set_accessed(pthread->pagedir, curr_page->vaddr, false);
       else{
@@ -103,6 +104,7 @@ static void* frame_evict(enum palloc_flags flags){
   }
 
   lock_acquire(&frame_table_lock);
+
   if (pagedir_is_dirty(evict_thread->pagedir, evict_page->vaddr) || 
       evict_page->type == PAGE_SWAP)
   {

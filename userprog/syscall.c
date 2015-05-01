@@ -233,8 +233,10 @@ static void syscall_exec(struct intr_frame* f){
     return;
   }
 
-  int new_pid;
-  new_pid = process_execute(cmd_line); // pid == tid
+  //lock_acquire(&opened_files_lock);
+  int new_pid = process_execute(cmd_line); // pid == tid
+  //lock_release(&opened_files_lock);
+
   if (new_pid == TID_ERROR)
     f->eax = ERROR;
   else
