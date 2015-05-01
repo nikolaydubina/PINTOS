@@ -162,6 +162,7 @@ page_fault (struct intr_frame *f)
           success = false;
         else{
           success = load_page(curr_page);
+          //printf("DEBUG: page fault - success=%s\n", success?"T":"F");
           curr_page->pinned = false;    // TODO: WHY?
         }
       }

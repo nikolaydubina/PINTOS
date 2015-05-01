@@ -357,7 +357,8 @@ load (const char *file_name, void (**eip) (void), void **esp, args_descr* args)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  //printf("DEBUG: filesys open: %s\n", file_name);
+  file = filesys_open(file_name);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);

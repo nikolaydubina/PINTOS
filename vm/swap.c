@@ -9,8 +9,6 @@ void swap_init(){
   ASSERT(disk != NULL);
 
   swap_slots = bitmap_create(disk_size(disk) / SECTORS_PER_PAGE);
-  //printf("DEBUG: disk_size:%d\n", disk_size(disk) / SECTORS_PER_PAGE);
-  //printf("DEBUG: swap_size:%d\n", disk_size(disk) / SECTORS_PER_PAGE * PGSIZE);
 
   bitmap_set_all(swap_slots, SWAP_FREE);
   lock_init(&swap_lock);
