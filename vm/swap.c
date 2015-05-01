@@ -4,7 +4,7 @@ static unsigned N_slots;            /* number of slots */
 static struct disk* disk;           /* swap disk */
 static struct bitmap* swap_slots;   /* describes pages slots in swap disk */
 static struct semaphore free_slots; /* signals that there are free slots */
-static struct lock bitmap_lock;     /* synch access to bitmap among swap_out  */
+static struct lock bitmap_lock;     /* synch access to bitmap */
 
 static inline struct semaphore* get_sema(int index);
 
@@ -30,8 +30,10 @@ void swap_in(const struct page* page){
   size_t page_index = page->swap_id;
   ASSERT(page_index != BITMAP_ERROR);
 
+  lock_acquire(&bitmap_lock);
   ASSERT(bitmap_test(swap_slots, page_index) == SWAP_USED);
   bitmap_set(swap_slots, page_index, SWAP_FREE);
+  lock_release(&bitmap_lock);
 
   sema_up(&free_slots);
 
