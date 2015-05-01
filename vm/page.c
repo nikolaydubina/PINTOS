@@ -61,6 +61,7 @@ static bool load_swap(struct page* page){
   ASSERT(page->swap_id != BITMAP_ERROR);
   ASSERT(page->type == PAGE_SWAP);
 
+  page->pinned = true;
   page->paddr = frame_create(PAL_USER, page);
   swap_in(page);
 
@@ -79,9 +80,8 @@ static bool load_file(struct page* page){
   ASSERT(page != NULL);
   ASSERT(page->type == PAGE_FILE);
 
+  page->pinned      = true;
   page->paddr       = frame_create(PAL_USER, page);
-
-  page->pinned      = !intr_context();    // TODO: WHY?
   page->type        = PAGE_SWAP;
   page->swap_id     = BITMAP_ERROR;
   
@@ -98,13 +98,11 @@ static bool load_file(struct page* page){
   }
 
   /* reading from file to paddr, synchronizing with syscalls */
-  //lock_acquire(&opened_files_lock);
   if (file_read_at(page->file, page->paddr, page->read_bytes, page->ofs) != (int)page->read_bytes)
   {
     palloc_free_page(page->paddr);
     return false; 
   }
-  //lock_release(&opened_files_lock);
 
   memset(page->paddr + page->read_bytes, 0, page->zero_bytes);
 
