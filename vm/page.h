@@ -15,7 +15,6 @@
 enum page_type{
   PAGE_SWAP,
   PAGE_FILE
-  //PAGE_MMAP
 };
 
 struct page{
