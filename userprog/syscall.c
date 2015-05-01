@@ -9,6 +9,7 @@
 #include "userprog/syscall.h"
 #include "vm/page.h"
 
+#define ROBUST_BUFFER_CHECK false             /* requires a lot of resoruces */
 #define ERROR -1
 
 #define ARG0 correct_address(f->esp, PHYS_BASE)
