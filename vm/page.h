@@ -14,7 +14,8 @@
 
 enum page_type{
   PAGE_SWAP,
-  PAGE_FILE
+  PAGE_FILE,
+  PAGE_MMAP
 };
 
 struct page{
@@ -37,6 +38,9 @@ struct page{
   size_t zero_bytes;
   off_t ofs;
 
+  /* PAGE_MMAP */
+  int mmap_id;
+
   struct hash_elem hash_elem;
 };
 
@@ -51,6 +55,8 @@ void page_construct(void);
 void page_destruct(void);
 
 struct page* page_get(void* addr);
+bool page_mmap(int mmap_id, struct file* file, void* vaddr);
+bool page_munmap(int mmap_id);
 bool page_insert_file(struct file* file, void* vaddr, 
                       size_t page_read_bytes, size_t page_zero_bytes,
                       bool writable, off_t ofs);
