@@ -9,6 +9,7 @@
 
 static bool load_swap(struct page* page);
 static bool load_file(struct page* page);
+static bool load_mmap(struct page* page);
 
 /* helper routines */
 static struct page* page_lookup(const void *address);
@@ -50,6 +51,9 @@ bool load_page(struct page* page){
       case PAGE_FILE:
         success = load_file(page);
         break;
+      case PAGE_MMAP:
+        success = load_mmap(page);
+        break;
     }
 
   return success;
@@ -79,6 +83,42 @@ static bool load_swap(struct page* page){
 static bool load_file(struct page* page){
   ASSERT(page != NULL);
   ASSERT(page->type == PAGE_FILE);
+
+  page->pinned      = true;
+  page->paddr       = frame_create(PAL_USER, page);
+  page->type        = PAGE_SWAP;
+  page->swap_id     = BITMAP_ERROR;
+  
+  if (page->vaddr == NULL){
+    free(page);
+    return false;
+  }
+
+  /* install page */
+  if (!install_page(page->vaddr, page->paddr, page->writable)){
+    frame_free(page->paddr);
+    free(page);
+    return false;
+  }
+
+  /* reading from file to paddr, synchronizing with syscalls */
+  if (file_read_at(page->file, page->paddr, page->read_bytes, page->ofs) != (int)page->read_bytes)
+  {
+    palloc_free_page(page->paddr);
+    return false; 
+  }
+
+  memset(page->paddr + page->read_bytes, 0, page->zero_bytes);
+
+  page->loaded      = true;
+  return true;
+}
+
+/* handling mmap case */
+static bool load_mmap(struct page* page){
+  ASSERT(page != NULL);
+  ASSERT(page->type == PAGE_MMAP);
+  ASSERT(page->vaddr != NULL);
 
   page->pinned      = true;
   page->paddr       = frame_create(PAL_USER, page);
@@ -173,6 +213,81 @@ bool page_insert_file(struct file* file, void* vaddr, size_t page_read_bytes,
   new_page->ofs         = ofs;
   
   return (hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL);
+}
+
+bool page_mmap(int mmap_id, struct file* file, void* vaddr){
+  off_t file_size = file_length(file);
+  off_t ofs = 0;
+  bool writable = true;
+  void* curr_addr = vaddr;
+ 
+  //printf("DEBUG: addr=%p addr+file_size=%p\n", vaddr, vaddr + file_size);
+  for(curr_addr = vaddr; 
+      curr_addr < vaddr + file_size; 
+      curr_addr += PGSIZE)
+  {
+    //printf("DEBUG: in\n");
+    size_t size = ofs + PGSIZE < file_size ? PGSIZE : file_size - ofs;
+    size_t page_read_bytes = size;
+    size_t page_zero_bytes = PGSIZE - size;
+    // -----------
+    struct page* new_page = malloc(sizeof(struct page));
+
+    /* check address validity */
+    if ((PHYS_BASE - pg_round_down(curr_addr)) > MAX_STACK)
+      return false;
+
+    /* check frame */
+    new_page->vaddr       = pg_round_down(curr_addr);   /* rounding down to nearest page */
+    new_page->paddr       = NULL;
+
+    new_page->writable    = writable;
+    new_page->loaded      = false;
+    new_page->pinned      = false;
+    new_page->type        = PAGE_MMAP;
+    new_page->swap_id     = BITMAP_ERROR;
+    new_page->thread      = thread_current();
+
+    /* PAGE_FILE */
+    new_page->file        = file;
+    new_page->read_bytes  = page_read_bytes;
+    new_page->zero_bytes  = page_zero_bytes;
+    new_page->ofs         = ofs;
+
+    /* PAGE_MMAP */
+    new_page->mmap_id     = mmap_id;
+    
+    hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem);
+
+    // -----------
+    curr_addr += size;
+    ofs += size;
+    //printf("DEBUG: out\n");
+  }
+  return true;
+}
+
+/* removing page from page_table */
+bool page_munmap(int mmap_id){
+  //printf("DEBUG: munmap enter\n");
+  struct hash* page_table = &(thread_current()->page_table->table);
+  struct hash_iterator e;
+
+  hash_first(&e, page_table);
+  while(hash_next(&e)){
+    struct page* curr = hash_entry(hash_cur(&e), struct page, hash_elem);
+    
+    if (curr->mmap_id == mmap_id){
+      hash_delete(page_table, &curr->hash_elem);
+      
+      //frame_free(curr->frame)
+
+      hash_first(&e, page_table);
+    }
+  }
+
+  //printf("DEBUG: munmap exit\n");
+  return true;
 }
 
 /*

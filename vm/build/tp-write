@@ -1,0 +1,4 @@
+#!/bin/bash
+make all
+
+pintos -v -k -T 60 --qemu  --fs-disk=2 -p tests/vm/mmap-write -a mmap-write --swap-disk=4 -- -q -f run mmap-write

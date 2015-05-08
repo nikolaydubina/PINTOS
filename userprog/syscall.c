@@ -33,6 +33,8 @@ static void syscall_write(struct intr_frame*);
 static void syscall_seek(struct intr_frame*);
 static void syscall_tell(struct intr_frame*);
 static void syscall_close(struct intr_frame*);
+static void syscall_mmap(struct intr_frame* f);
+static void syscall_munmap(struct intr_frame* f);
 
 static struct file_descr* lookup_file(int fid);
 bool correct_address(void* p, void* esp);
@@ -179,12 +181,15 @@ syscall_handler (struct intr_frame* f){
     case SYS_CLOSE:   
       syscall_close(f);
       break;
+    /* Project 3 and optionally project 4. */
+    case SYS_MMAP:
+      syscall_mmap(f);
+      break;
+    case SYS_MUNMAP:
+      syscall_munmap(f);
+      break;
     default:
       printf("ERROR!\n");
-
-    /* Project 3 and optionally project 4. */
-    //SYS_MMAP,                   /* Map a file into memory. */
-    //SYS_MUNMAP,                 /* Remove a memory mapping. */
 
     /* Project 4 only. */
     //SYS_CHDIR,                  /* Change the current directory. */
@@ -532,6 +537,57 @@ static void syscall_close(struct intr_frame* f){
   file_close(fdescr->file);
   list_remove(&fdescr->elem);
   lock_release(&opened_files_lock);
+}
+
+/* Map a file into memory. */
+static void syscall_mmap(struct intr_frame* f){
+  CHECK(ARG2)
+  int fid;
+  void* addr;
+
+  memcpy(&fid, f->esp + 4, 4);
+  memcpy(&addr, f->esp + 8, 4);
+
+  //if (!correct_address(addr, f->esp))
+  //  safe_exit(ERROR);
+
+  /* check and lookup file-id */
+  lock_acquire(&opened_files_lock);
+  struct file_descr* file;
+  struct list_elem* e;
+  bool found = false;
+  for(e = list_begin(&opened_files);
+      e != list_end(&opened_files) && !found;
+      e = list_next(e))
+  {
+     struct file_descr* curr = list_entry(e, struct file_descr, elem);
+     if (curr->pid == thread_current()->tid && curr->fid == fid){
+       file = curr;
+       found = true;
+     }
+  }
+
+  if (!found || file == NULL)
+    safe_exit(ERROR);
+
+  /* mmap file */
+  static int new_mmapid = 0;
+  new_mmapid++;
+
+  page_mmap(new_mmapid, file->file, addr); 
+
+  f->eax = new_mmapid;
+  lock_release(&opened_files_lock);
+}
+
+/* Remove a memory mapping. */
+static void syscall_munmap(struct intr_frame* f){
+  CHECK(ARG1)
+  int mmap_id;
+
+  memcpy(&mmap_id, f->esp + 4, 4);
+
+  page_munmap(mmap_id);
 }
 
 /* helper routine */
