@@ -122,8 +122,6 @@ static bool load_mmap(struct page* page){
 
   page->pinned      = true;
   page->paddr       = frame_create(PAL_USER, page);
-  page->type        = PAGE_SWAP;
-  page->swap_id     = BITMAP_ERROR;
   
   if (page->vaddr == NULL){
     free(page);
@@ -222,8 +220,9 @@ bool page_mmap(int mmap_id, struct file* file, void* vaddr){
   void* curr_addr = vaddr;
  
   //printf("DEBUG: addr=%p addr+file_size=%p\n", vaddr, vaddr + file_size);
+  bool success = true;
   for(curr_addr = vaddr; 
-      curr_addr < vaddr + file_size; 
+      curr_addr < vaddr + file_size && success; 
       curr_addr += PGSIZE)
   {
     //printf("DEBUG: in\n");
@@ -235,7 +234,7 @@ bool page_mmap(int mmap_id, struct file* file, void* vaddr){
 
     /* check address validity */
     if ((PHYS_BASE - pg_round_down(curr_addr)) > MAX_STACK)
-      return false;
+      success = false;
 
     /* check frame */
     new_page->vaddr       = pg_round_down(curr_addr);   /* rounding down to nearest page */
@@ -257,19 +256,25 @@ bool page_mmap(int mmap_id, struct file* file, void* vaddr){
     /* PAGE_MMAP */
     new_page->mmap_id     = mmap_id;
     
-    hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem);
+    success = hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL;
 
     // -----------
     curr_addr += size;
     ofs += size;
     //printf("DEBUG: out\n");
   }
-  return true;
+  return success;
+}
+
+void uninstall_page(struct page* page){
+  pagedir_clear_page(thread_current()->pagedir, page->vaddr);
 }
 
 /* removing page from page_table */
 bool page_munmap(int mmap_id){
   //printf("DEBUG: munmap enter\n");
+  bool success = true;
+  bool found = false;
   struct hash* page_table = &(thread_current()->page_table->table);
   struct hash_iterator e;
 
@@ -278,16 +283,40 @@ bool page_munmap(int mmap_id){
     struct page* curr = hash_entry(hash_cur(&e), struct page, hash_elem);
     
     if (curr->mmap_id == mmap_id){
-      hash_delete(page_table, &curr->hash_elem);
-      
-      //frame_free(curr->frame)
-
+      if (curr->paddr != NULL && curr->file != NULL)
+        success &= file_write_at(curr->file, curr->paddr, PGSIZE, curr->ofs);
+      success &= hash_delete(page_table, &curr->hash_elem) != NULL;
+     
+      uninstall_page(curr);
+      frame_free(curr->frame);
+      found = true;
       hash_first(&e, page_table);
     }
   }
 
   //printf("DEBUG: munmap exit\n");
-  return true;
+  success &= found;
+  return success;
+}
+
+void page_exit_mmap(){
+  struct hash* page_table = &(thread_current()->page_table->table);
+  struct hash_iterator e;
+
+  hash_first(&e, page_table);
+  while(hash_next(&e)){
+    struct page* curr = hash_entry(hash_cur(&e), struct page, hash_elem);
+    
+    if (curr->type == PAGE_MMAP){
+      if (curr->paddr != NULL && curr->file != NULL)
+        file_write_at(curr->file, curr->paddr, PGSIZE, curr->ofs);
+      hash_delete(page_table, &curr->hash_elem) != NULL;
+     
+      uninstall_page(curr);
+      frame_free(curr->frame);
+      hash_first(&e, page_table);
+    }
+  }
 }
 
 /*
