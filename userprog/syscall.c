@@ -42,9 +42,12 @@ bool correct_buffer(void* p, size_t n, void* esp, bool write);
 bool correct_string(void* p, void* esp);
 
 struct file_descr{
-  int fid;
-  tid_t pid;
-  struct file* file;
+  int fid;              /* file id */
+  tid_t pid;            /* process id */
+  bool closed;          /* syscall close was called */
+  bool is_mmap;         /* there is mmap that uses this file */
+  int mmap_id;          /* mmap id of corresponding mmap */
+  struct file* file;    /* file struct */
   struct list_elem elem;
 };
 
@@ -214,6 +217,8 @@ static void syscall_exit(struct intr_frame* f){
 
   memcpy(&exit_status, f->esp + 4, 4);
 
+  page_exit_mmap();
+
   lock_acquire(&opened_files_lock);
 
   /* allowing write to executable */
@@ -345,6 +350,9 @@ static void syscall_open(struct intr_frame* f){
     struct file_descr* newfile_descr = malloc(sizeof(struct file_descr));
     newfile_descr->fid = new_fid;
     newfile_descr->pid = thread_current()->tid;
+    newfile_descr->closed = false;
+    newfile_descr->is_mmap = false;
+    newfile_descr->mmap_id = 0;
     newfile_descr->file = new_file;
     list_push_back(&opened_files, &newfile_descr->elem);
     f->eax = newfile_descr->fid;
@@ -534,9 +542,40 @@ static void syscall_close(struct intr_frame* f){
     return;
   }
 
-  file_close(fdescr->file);
+  if (!fdescr->is_mmap)
+    file_close(fdescr->file);
+  fdescr->closed = true;
   list_remove(&fdescr->elem);
   lock_release(&opened_files_lock);
+}
+
+inline bool correct_address_mmap(void* addr, void* esp){
+  if (!(is_user_vaddr(addr) && addr > USER_VADDR_MIN && addr != NULL))
+    return false;
+
+  bool success = false;
+  if (page_get(addr) == NULL)
+    success = true;
+
+  return success;
+}
+
+bool correct_mmap(void* addr, off_t file_length, void* esp){
+  bool ret = true;
+  void* curr_addr = pg_round_down(addr);
+
+  /* missalignment */
+  if (curr_addr != addr)
+    return false;
+
+  for(curr_addr = pg_round_down(addr); 
+      curr_addr < addr + file_length && ret;
+      curr_addr += PGSIZE)
+  {
+    ret = correct_address_mmap(curr_addr, esp);
+  }
+
+  return ret;
 }
 
 /* Map a file into memory. */
@@ -548,11 +587,16 @@ static void syscall_mmap(struct intr_frame* f){
   memcpy(&fid, f->esp + 4, 4);
   memcpy(&addr, f->esp + 8, 4);
 
-  //if (!correct_address(addr, f->esp))
-  //  safe_exit(ERROR);
+  if (addr == NULL){
+    f->eax = ERROR;
+    return;
+  }
 
   /* check and lookup file-id */
   lock_acquire(&opened_files_lock);
+  static int new_mmapid = 0;
+  new_mmapid++;
+
   struct file_descr* file;
   struct list_elem* e;
   bool found = false;
@@ -560,21 +604,33 @@ static void syscall_mmap(struct intr_frame* f){
       e != list_end(&opened_files) && !found;
       e = list_next(e))
   {
-     struct file_descr* curr = list_entry(e, struct file_descr, elem);
-     if (curr->pid == thread_current()->tid && curr->fid == fid){
-       file = curr;
-       found = true;
-     }
+    struct file_descr* curr = list_entry(e, struct file_descr, elem);
+    if (curr->pid == thread_current()->tid && curr->fid == fid){
+      curr->is_mmap = true;
+      curr->mmap_id = new_mmapid;
+      file = curr;
+      found = true;
+    }
   }
 
-  if (!found || file == NULL)
+  if (!found || file == NULL){
+    lock_release(&opened_files_lock);
     safe_exit(ERROR);
+  }
+
+  /* check new address */
+  if (!correct_mmap(addr, file_length(file->file), f->esp)){
+    lock_release(&opened_files_lock);
+    f->eax = ERROR;
+    return;
+  }
 
   /* mmap file */
-  static int new_mmapid = 0;
-  new_mmapid++;
-
-  page_mmap(new_mmapid, file->file, addr); 
+  if (!page_mmap(new_mmapid, file->file, addr)){
+    lock_release(&opened_files_lock);
+    f->eax = ERROR;
+    return;
+  }
 
   f->eax = new_mmapid;
   lock_release(&opened_files_lock);
@@ -586,8 +642,31 @@ static void syscall_munmap(struct intr_frame* f){
   int mmap_id;
 
   memcpy(&mmap_id, f->esp + 4, 4);
+  
+  /* closing file */
+  struct file_descr* file;
+  struct list_elem* e;
+  bool found = false;
+  for(e = list_begin(&opened_files);
+      e != list_end(&opened_files) && !found;
+      e = list_next(e))
+  {
+    struct file_descr* curr = list_entry(e, struct file_descr, elem);
+    if (curr->mmap_id == mmap_id && curr->pid == thread_current()->tid){
+      file = curr;
+      found = true;
+    }
+  }
 
-  page_munmap(mmap_id);
+  if (found){
+    if (file->closed)
+      file_close(file->file);
+    file->is_mmap = false;
+  }
+
+  /* removing page tables */
+  if (!page_munmap(mmap_id))
+    f->eax= ERROR;
 }
 
 /* helper routine */
