@@ -167,6 +167,9 @@ bool grow_stack(void* vaddr){
   new_page->type        = PAGE_SWAP;
   new_page->swap_id     = BITMAP_ERROR;
   new_page->thread      = thread_current();
+
+  /* PAGE_MMAP */
+  new_page->file_isok   = true;
   
   if (new_page->vaddr == NULL){
     free(new_page);
@@ -209,6 +212,9 @@ bool page_insert_file(struct file* file, void* vaddr, size_t page_read_bytes,
   new_page->read_bytes  = page_read_bytes;
   new_page->zero_bytes  = page_zero_bytes;
   new_page->ofs         = ofs;
+
+  /* PAGE_MMAP */
+  new_page->file_isok   = true;
   
   return (hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL);
 }
@@ -224,7 +230,6 @@ bool page_mmap(int mmap_id, struct file* file, void* vaddr){
       (curr_addr < pg_round_down(vaddr) + file_size) && success; 
       curr_addr += PGSIZE)
   {
-    //printf("DEBUG: from=%p to=%p\n", curr_addr, curr_addr + PGSIZE);
     size_t size = ofs + PGSIZE < file_size ? PGSIZE : file_size - ofs;
     size_t page_read_bytes = size;
     size_t page_zero_bytes = PGSIZE - size;
@@ -249,6 +254,7 @@ bool page_mmap(int mmap_id, struct file* file, void* vaddr){
 
     /* PAGE_MMAP */
     new_page->mmap_id     = mmap_id;
+    new_page->file_isok   = true;
     
     success &= hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL;
     
@@ -276,7 +282,7 @@ bool page_munmap(int mmap_id){
     struct page* curr = hash_entry(hash_cur(&e), struct page, hash_elem);
     
     if (curr->mmap_id == mmap_id){
-      if (curr->paddr != NULL && curr->file != NULL &&
+      if (curr->paddr != NULL && curr->file != NULL && curr->file_isok &&
           pagedir_is_dirty(thread_current()->pagedir, curr->vaddr))
         success &= file_write_at(curr->file, curr->paddr, PGSIZE, curr->ofs);
       success &= hash_delete(page_table, &curr->hash_elem) != NULL;
@@ -292,6 +298,22 @@ bool page_munmap(int mmap_id){
   return success;
 }
 
+/* updates file availability of all pages of selected mmap */
+bool page_update_mmap_file(int mmap_id, bool writable){
+  struct hash* page_table = &(thread_current()->page_table->table);
+  struct hash_iterator e;
+
+  hash_first(&e, page_table);
+  while(hash_next(&e)){
+    struct page* curr = hash_entry(hash_cur(&e), struct page, hash_elem);
+    
+    if (curr->type == PAGE_MMAP && curr->mmap_id == mmap_id)
+      curr->file_isok = writable;
+  }
+
+  return true;
+}
+
 void page_exit_mmap(){
   struct hash* page_table = &(thread_current()->page_table->table);
   struct hash_iterator e;
@@ -301,7 +323,7 @@ void page_exit_mmap(){
     struct page* curr = hash_entry(hash_cur(&e), struct page, hash_elem);
     
     if (curr->type == PAGE_MMAP){
-      if (curr->paddr != NULL && curr->file != NULL)
+      if (curr->paddr != NULL && curr->file != NULL && curr->file_isok)
         file_write_at(curr->file, curr->paddr, PGSIZE, curr->ofs);
       hash_delete(page_table, &curr->hash_elem) != NULL;
      

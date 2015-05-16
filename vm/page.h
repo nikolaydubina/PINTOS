@@ -39,7 +39,8 @@ struct page{
   off_t ofs;
 
   /* PAGE_MMAP */
-  int mmap_id;
+  int mmap_id;            /* id of mmap */
+  bool file_isok;         /* can write to file */
 
   struct hash_elem hash_elem;
 };
@@ -57,6 +58,7 @@ void page_destruct(void);
 struct page* page_get(void* addr);
 bool page_mmap(int mmap_id, struct file* file, void* vaddr);
 bool page_munmap(int mmap_id);
+bool page_update_mmap_file(int mmap_id, bool writable);
 bool page_insert_file(struct file* file, void* vaddr, 
                       size_t page_read_bytes, size_t page_zero_bytes,
                       bool writable, off_t ofs);
