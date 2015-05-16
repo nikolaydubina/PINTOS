@@ -18,7 +18,7 @@ static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less(const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
 
 void page_init(void){;}
-struct page* page_get(void* vaddr){ return page_lookup(pg_round_down(vaddr)); }
+struct page* page_get(void* vaddr){ return page_lookup(vaddr); }
 
 /* initialize page table - per thread */
 void page_construct(void){
@@ -217,24 +217,18 @@ bool page_mmap(int mmap_id, struct file* file, void* vaddr){
   off_t file_size = file_length(file);
   off_t ofs = 0;
   bool writable = true;
-  void* curr_addr = vaddr;
  
-  //printf("DEBUG: addr=%p addr+file_size=%p\n", vaddr, vaddr + file_size);
+  void* curr_addr = pg_round_down(vaddr);
   bool success = true;
-  for(curr_addr = vaddr; 
-      curr_addr < vaddr + file_size && success; 
+  for(curr_addr = pg_round_down(vaddr); 
+      (curr_addr < pg_round_down(vaddr) + file_size) && success; 
       curr_addr += PGSIZE)
   {
-    //printf("DEBUG: in\n");
+    //printf("DEBUG: from=%p to=%p\n", curr_addr, curr_addr + PGSIZE);
     size_t size = ofs + PGSIZE < file_size ? PGSIZE : file_size - ofs;
     size_t page_read_bytes = size;
     size_t page_zero_bytes = PGSIZE - size;
-    // -----------
     struct page* new_page = malloc(sizeof(struct page));
-
-    /* check address validity */
-    if ((PHYS_BASE - pg_round_down(curr_addr)) > MAX_STACK)
-      success = false;
 
     /* check frame */
     new_page->vaddr       = pg_round_down(curr_addr);   /* rounding down to nearest page */
@@ -256,12 +250,9 @@ bool page_mmap(int mmap_id, struct file* file, void* vaddr){
     /* PAGE_MMAP */
     new_page->mmap_id     = mmap_id;
     
-    success = hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL;
+    success &= hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL;
 
-    // -----------
-    curr_addr += size;
     ofs += size;
-    //printf("DEBUG: out\n");
   }
   return success;
 }
@@ -272,7 +263,6 @@ void uninstall_page(struct page* page){
 
 /* removing page from page_table */
 bool page_munmap(int mmap_id){
-  //printf("DEBUG: munmap enter\n");
   bool success = true;
   bool found = false;
   struct hash* page_table = &(thread_current()->page_table->table);
@@ -294,7 +284,6 @@ bool page_munmap(int mmap_id){
     }
   }
 
-  //printf("DEBUG: munmap exit\n");
   success &= found;
   return success;
 }
