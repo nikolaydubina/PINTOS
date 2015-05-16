@@ -1,7 +1,0 @@
-#!/bin/bash
-make all
-
-pintos -v -k -T 60 --qemu  --fs-disk=2 -p tests/vm/mmap-remove \
-    -a mmap-remove -p ../../tests/vm/sample.txt -a sample.txt --swap-disk=4 -- -q  \
-    -f run mmap-remove
-
