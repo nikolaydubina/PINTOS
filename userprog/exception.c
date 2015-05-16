@@ -163,7 +163,9 @@ page_fault (struct intr_frame *f)
         else{
           success = load_page(curr_page);
           curr_page->pinned = false;
+          //if (!success) printf("DEBUG: cant load. but there is\n");
         }
+        //printf("DEBUG: found %p\n", fault_addr);
       }
       else if (is_stack_access(fault_addr, f->esp))
         success = grow_stack(fault_addr);
