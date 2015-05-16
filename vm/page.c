@@ -16,11 +16,15 @@ static struct page* page_lookup(const void *address);
 static void destroy_hentry(struct hash_elem* e, void *aux UNUSED);
 static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less(const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
+static void uninstall_page(struct page* page);
 
+/* initialize page table structures */
 void page_init(void){;}
+
+/* get page from page_table */
 struct page* page_get(void* vaddr){ return page_lookup(vaddr); }
 
-/* initialize page table - per thread */
+/* initialize page table. one per thread */
 void page_construct(void){
   struct page_table* new = malloc(sizeof(struct page_table));
 
@@ -114,7 +118,8 @@ static bool load_file(struct page* page){
   return true;
 }
 
-/* handling mmap case */
+/* handling mmap case
+ * NOTE: also used in page_mmap */
 static bool load_mmap(struct page* page){
   ASSERT(page != NULL);
   ASSERT(page->type == PAGE_MMAP);
@@ -135,13 +140,14 @@ static bool load_mmap(struct page* page){
     return false;
   }
 
-  /* reading from file to paddr, synchronizing with syscalls */
+  /* reading from file to paddr */
   if (file_read_at(page->file, page->paddr, page->read_bytes, page->ofs) != (int)page->read_bytes)
   {
     palloc_free_page(page->paddr);
     return false; 
   }
 
+  /* filling rest with zeroes */
   memset(page->paddr + page->read_bytes, 0, page->zero_bytes);
 
   page->loaded      = true;
@@ -219,6 +225,8 @@ bool page_insert_file(struct file* file, void* vaddr, size_t page_read_bytes,
   return (hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL);
 }
 
+/* inserts pages to cover mmap-ed region of memory.
+ * NOTE: DOES NOT lazy load */
 bool page_mmap(int mmap_id, struct file* file, void* vaddr){
   off_t file_size = file_length(file);
   off_t ofs = 0;
@@ -266,10 +274,6 @@ bool page_mmap(int mmap_id, struct file* file, void* vaddr){
   return success;
 }
 
-void uninstall_page(struct page* page){
-  pagedir_clear_page(thread_current()->pagedir, page->vaddr);
-}
-
 /* removing page from page_table */
 bool page_munmap(int mmap_id){
   bool success = true;
@@ -314,6 +318,8 @@ bool page_update_mmap_file(int mmap_id, bool writable){
   return true;
 }
 
+/* copies content of mmap-ed region of memory to file, if necessary.
+ * NOTE: called in process_exit */
 void page_exit_mmap(){
   struct hash* page_table = &(thread_current()->page_table->table);
   struct hash_iterator e;
@@ -373,3 +379,8 @@ static void destroy_hentry(struct hash_elem* e, void *aux UNUSED){
     free(dpage);
   }
 }
+
+static void uninstall_page(struct page* page){
+  pagedir_clear_page(thread_current()->pagedir, page->vaddr);
+}
+
