@@ -9,17 +9,20 @@
 #include "userprog/syscall.h"
 #include "vm/page.h"
 
-#define ROBUST_BUFFER_CHECK false             /* requires a lot of resoruces */
-#define ERROR -1
+#define ROBUST_BUFFER_CHECK false   /* requires a lot of resoruces */
+#define ERROR -1                    /* return value on failure */
 
+/* arguments checking */
 #define ARG0 correct_address(f->esp, PHYS_BASE)
 #define ARG1 ARG0 && correct_address(f->esp + 4, PHYS_BASE)
 #define ARG2 ARG1 && correct_address(f->esp + 8, PHYS_BASE)
 #define ARG3 ARG2 && correct_address(f->esp + 12, PHYS_BASE)
-#define CHECK(c) if (!(c)) safe_exit(ERROR);
+#define CHECK(c) if (!(c)) safe_exit(ERROR)
 
+/* syscall dispatcher */
 static void syscall_handler (struct intr_frame*);
 
+/* syscall handlers */
 static void syscall_halt(struct intr_frame*);
 static void syscall_exit(struct intr_frame*);
 static void syscall_exec(struct intr_frame*);
@@ -36,17 +39,20 @@ static void syscall_close(struct intr_frame*);
 static void syscall_mmap(struct intr_frame* f);
 static void syscall_munmap(struct intr_frame* f);
 
+/* helper routine */
 static struct file_descr* lookup_file(int fid);
-bool correct_address(void* p, void* esp);
-bool correct_buffer(void* p, size_t n, void* esp, bool write);
-bool correct_string(void* p, void* esp);
+static bool correct_address(void* p, void* esp);
+static bool correct_buffer(void* p, size_t n, void* esp, bool write);
+static bool correct_string(void* p, void* esp);
+static bool correct_address_mmap(void* addr, void* esp);
+static bool correct_mmap(void* addr, off_t file_length, void* esp);
 
 struct file_descr{
-  int fid;              /* file id */
-  tid_t pid;            /* process id */
-  bool is_mmap;         /* there is mmap that uses this file */
-  int mmap_id;          /* mmap id of corresponding mmap */
-  struct file* file;    /* file struct */
+  int fid;                /* file id */
+  tid_t pid;              /* process id */
+  bool is_mmap;           /* there is mmap that uses this file */
+  int mmap_id;            /* mmap id of corresponding mmap */
+  struct file* file;      /* file struct */
   struct list_elem elem;
 };
 
@@ -54,16 +60,19 @@ struct file_descr{
 struct list opened_files;
 struct lock opened_files_lock;
 
+/* initialization of syscall structures */
 void syscall_init (void){
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   list_init(&opened_files);
   lock_init(&opened_files_lock);
 }
 
+/* error checking */
 inline bool is_stack_access(void* addr, void* esp){
   return addr >= esp - STACK_ACCESS_HEURISTIC;
 }
 
+/* NOTE: loads page if it is not loaded */
 inline bool correct_address(void* addr, void* esp){
   if (!(is_user_vaddr(addr) && addr > USER_VADDR_MIN && addr != NULL))
     return false;
@@ -128,15 +137,45 @@ bool correct_string(void* p, void* esp){
   return ret;
 }
 
+static bool correct_address_mmap(void* addr, void* esp){
+  if (!(is_user_vaddr(addr) && addr > USER_VADDR_MIN && addr != NULL))
+    return false;
+
+  bool success = false;
+  if (page_get(addr) == NULL)
+    success = true;
+
+  return success;
+}
+
+static bool correct_mmap(void* addr, off_t file_length, void* esp){
+  bool ret = true;
+  void* curr_addr = pg_round_down(addr);
+
+  /* missalignment */
+  if (curr_addr != addr)
+    return false;
+
+  for(curr_addr = pg_round_down(addr); 
+      curr_addr < addr + file_length && ret;
+      curr_addr += PGSIZE)
+  {
+    ret = correct_address_mmap(curr_addr, esp);
+  }
+
+  return ret;
+}
+
+/* terminate current thread safely */
 void safe_exit(int exit_status){
   thread_current()->exit_status = exit_status;
   printf("%s: exit(%d)\n", thread_name(), exit_status);
   thread_exit();
 }
 
-static void
-syscall_handler (struct intr_frame* f){
-  CHECK(ARG0)
+/* syscall dispatcher */
+static void syscall_handler (struct intr_frame* f){
+  CHECK(ARG0);
 
   int syscall_num;
   memcpy(&syscall_num, f->esp, 4);
@@ -190,8 +229,6 @@ syscall_handler (struct intr_frame* f){
     case SYS_MUNMAP:
       syscall_munmap(f);
       break;
-    default:
-      printf("ERROR!\n");
 
     /* Project 4 only. */
     //SYS_CHDIR,                  /* Change the current directory. */
@@ -199,6 +236,9 @@ syscall_handler (struct intr_frame* f){
     //SYS_READDIR,                /* Reads a directory entry. */
     //SYS_ISDIR,                  /* Tests if a fd represents a directory. */
     //SYS_INUMBER                 /* Returns the inode number for a fd. */
+
+    default:
+      printf("ERROR!\n");
   }
 }
 
@@ -210,7 +250,7 @@ static void syscall_halt(struct intr_frame* f){
 
 /* Terminate this process. */
 static void syscall_exit(struct intr_frame* f){
-  CHECK(ARG1)
+  CHECK(ARG1);
 
   int exit_status;
 
@@ -248,7 +288,7 @@ static void syscall_exit(struct intr_frame* f){
 
 /* Start another process. */
 static void syscall_exec(struct intr_frame* f){
-  CHECK(ARG1)
+  CHECK(ARG1);
 
   char* cmd_line;
 
@@ -271,7 +311,7 @@ static void syscall_exec(struct intr_frame* f){
 
 /* Wait for a child process to die. */
 static void syscall_wait(struct intr_frame* f){
-  CHECK(ARG1)
+  CHECK(ARG1);
 
   int wpid;
 
@@ -283,7 +323,7 @@ static void syscall_wait(struct intr_frame* f){
 
 /* Create a file. */
 static void syscall_create(struct intr_frame* f){
-  CHECK(ARG2)
+  CHECK(ARG2);
 
   const char* file;
   unsigned initial_size;
@@ -302,7 +342,7 @@ static void syscall_create(struct intr_frame* f){
 
 /* Delete a file. */
 static void syscall_remove(struct intr_frame* f){
-  CHECK(ARG1)
+  CHECK(ARG1);
     
   const char* filename;
 
@@ -321,7 +361,7 @@ static void syscall_remove(struct intr_frame* f){
 
 /* Open a file. */
 static void syscall_open(struct intr_frame* f){
-  CHECK(ARG1)
+  CHECK(ARG1);
 
   const char* filename;
 
@@ -344,7 +384,7 @@ static void syscall_open(struct intr_frame* f){
     newfile_descr->fid = new_fid;
     newfile_descr->pid = thread_current()->tid;
     newfile_descr->is_mmap = false;
-    newfile_descr->mmap_id = 0;
+    newfile_descr->mmap_id = -1;
     newfile_descr->file = new_file;
     list_push_back(&opened_files, &newfile_descr->elem);
     f->eax = newfile_descr->fid;
@@ -354,7 +394,7 @@ static void syscall_open(struct intr_frame* f){
 
 /* Obtain a file's size. */
 static void syscall_filesize(struct intr_frame* f){
-  CHECK(ARG1)
+  CHECK(ARG1);
 
   int fid;
 
@@ -376,10 +416,7 @@ static void syscall_filesize(struct intr_frame* f){
 }
 
 static void syscall_read(struct intr_frame* f){
-  if (f == NULL)
-    safe_exit(ERROR);
-
-  CHECK(ARG3)
+  CHECK(ARG3);
 
   int fid;
   char* buffer;
@@ -392,17 +429,16 @@ static void syscall_read(struct intr_frame* f){
   if (!correct_buffer(buffer, size, f->esp, true))
     safe_exit(ERROR);
     
-  int asize =  size < 10000000 ? size : 10000000;
-
   if (fid == 1)
     safe_exit(ERROR);
 
   if (fid == 0){
     int i;
-    for(i = 0; i < asize; ++i)
+    for(i = 0; i < size; ++i)
       buffer[i] = input_getc();
-    if (i == asize)
-      f->eax = asize;
+
+    if (i == size)
+      f->eax = size;
     else
       f->eax = ERROR;
   }
@@ -415,13 +451,13 @@ static void syscall_read(struct intr_frame* f){
       safe_exit(ERROR);
     }
 
-    f->eax = file_read(fdescr->file, buffer, asize);
+    f->eax = file_read(fdescr->file, buffer, size);
     lock_release(&opened_files_lock);
   }
 }
 
 static void syscall_write(struct intr_frame* f){
-  CHECK(ARG3)
+  CHECK(ARG3);
 
   int fid;
   const char* buffer;
@@ -437,12 +473,10 @@ static void syscall_write(struct intr_frame* f){
   if (fid == 0)
     safe_exit(ERROR);
 
-  int asize =  size < 10000000 ? size : 10000000;
-
   lock_acquire(&opened_files_lock);
   if (fid == 1){
-    putbuf(buffer, asize);
-    f->eax = asize;
+    putbuf(buffer, size);
+    f->eax = size;
   }
   else{
     struct file_descr* fdescr = lookup_file(fid);
@@ -453,14 +487,14 @@ static void syscall_write(struct intr_frame* f){
       return;
     }
 
-    f->eax = file_write(fdescr->file, buffer, asize);
+    f->eax = file_write(fdescr->file, buffer, size);
   }
   lock_release(&opened_files_lock);
 }
 
 /* Change position in a file. */
 static void syscall_seek(struct intr_frame* f){
-  CHECK(ARG2)
+  CHECK(ARG2);
 
   int fid;
   unsigned position;
@@ -488,7 +522,7 @@ static void syscall_seek(struct intr_frame* f){
 
 /* Report current position in a file. */
 static void syscall_tell(struct intr_frame* f){
-  CHECK(ARG1)
+  CHECK(ARG1);
 
   int fid;
 
@@ -514,7 +548,7 @@ static void syscall_tell(struct intr_frame* f){
 
 /* Close a file. */
 static void syscall_close(struct intr_frame* f){
-  CHECK(ARG1)
+  CHECK(ARG1);
 
   int fid;
 
@@ -534,7 +568,7 @@ static void syscall_close(struct intr_frame* f){
     return;
   }
 
-  /* notify mmap */
+  /* update pages that mmaped to this file */
   if (fdescr->is_mmap)
     page_update_mmap_file(fdescr->mmap_id, false);
 
@@ -544,38 +578,9 @@ static void syscall_close(struct intr_frame* f){
   lock_release(&opened_files_lock);
 }
 
-inline bool correct_address_mmap(void* addr, void* esp){
-  if (!(is_user_vaddr(addr) && addr > USER_VADDR_MIN && addr != NULL))
-    return false;
-
-  bool success = false;
-  if (page_get(addr) == NULL)
-    success = true;
-
-  return success;
-}
-
-bool correct_mmap(void* addr, off_t file_length, void* esp){
-  bool ret = true;
-  void* curr_addr = pg_round_down(addr);
-
-  /* missalignment */
-  if (curr_addr != addr)
-    return false;
-
-  for(curr_addr = pg_round_down(addr); 
-      curr_addr < addr + file_length && ret;
-      curr_addr += PGSIZE)
-  {
-    ret = correct_address_mmap(curr_addr, esp);
-  }
-
-  return ret;
-}
-
 /* Map a file into memory. */
 static void syscall_mmap(struct intr_frame* f){
-  CHECK(ARG2)
+  CHECK(ARG2);
   int fid;
   void* addr;
 
@@ -608,6 +613,7 @@ static void syscall_mmap(struct intr_frame* f){
     }
   }
 
+  /* no such file */
   if (!found || file == NULL){
     lock_release(&opened_files_lock);
     safe_exit(ERROR);
@@ -633,32 +639,11 @@ static void syscall_mmap(struct intr_frame* f){
 
 /* Remove a memory mapping. */
 static void syscall_munmap(struct intr_frame* f){
-  CHECK(ARG1)
+  CHECK(ARG1);
   int mmap_id;
 
   memcpy(&mmap_id, f->esp + 4, 4);
   
-  /* closing file */
-  //struct file_descr* file;
-  //struct list_elem* e;
-  //bool found = false;
-  //for(e = list_begin(&opened_files);
-  //    e != list_end(&opened_files) && !found;
-  //    e = list_next(e))
-  //{
-  //  struct file_descr* curr = list_entry(e, struct file_descr, elem);
-  //  if (curr->mmap_id == mmap_id && curr->pid == thread_current()->tid){
-  //    file = curr;
-  //    found = true;
-  //  }
-  //}
-
-  //if (found){
-  //  if (file->closed)
-  //    file_close(file->file);
-  //  file->is_mmap = false;
-  //}
-
   /* removing page tables */
   if (!page_munmap(mmap_id))
     f->eax= ERROR;

@@ -1,9 +1,10 @@
 #include "vm/frame.h"
 
 /* global variables */
-static struct hash frame_table;
+static struct hash frame_table;                     /* frame table */
 static struct lock frame_table_lock;                /* modify lock */
-static struct semaphore frame_table_evict;          /* for better eviction */
+static struct semaphore frame_table_evict;          /* signals changes in frame table. 
+                                                     *  for better eviction */
 
 static void* frame_evict(enum palloc_flags flags);
 
@@ -17,7 +18,6 @@ static bool frame_less(const struct hash_elem *a_, const struct hash_elem *b_, v
 void frame_init(){
   lock_init(&frame_table_lock);
   hash_init(&frame_table, frame_hash, frame_less, NULL);
-
   sema_init(&frame_table_evict, 0);
 }
 
@@ -58,6 +58,8 @@ void frame_free(void* addr){
   lock_release(&frame_table_lock);
 }
 
+/* eviction.
+ * uses second chanse algorithm for page replacement */
 static void* frame_evict(enum palloc_flags flags){
   struct frame* evict_frame = NULL;
   struct page* evict_page = NULL;
@@ -67,7 +69,7 @@ static void* frame_evict(enum palloc_flags flags){
   bool found = false;
   struct hash_iterator e;
   while (!found){
-    /* receiving singal of change in frame table */
+    /* receiving singal of change in the frame table */
     sema_down(&frame_table_evict);
 
     /* checking all frames */
@@ -78,6 +80,7 @@ static void* frame_evict(enum palloc_flags flags){
       struct frame* curr_frame = hash_entry(hash_cur(&e), struct frame, hash_elem);
       struct page* curr_page = curr_frame->page;
 
+      /* if can evict page */
       if (!curr_page->pinned){
         struct thread *pthread = curr_page->thread;
 
