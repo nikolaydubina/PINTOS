@@ -93,11 +93,11 @@ inline bool correct_buffer(void* p, unsigned n, void* esp, bool write){
 
     /* first */
     curr = page_get(p);
-    ret &= curr->writable;
-
+    ret &= curr != NULL && curr->writable;
+    
     /* last */
     curr = page_get(p + n);
-    ret &= curr->writable;
+    ret &= curr != NULL && curr->writable;
   }
 
   /* roboust check */
@@ -439,7 +439,7 @@ static void syscall_write(struct intr_frame* f){
   memcpy(&buffer, f->esp + 8, 4);
   memcpy(&size, f->esp + 12, 4);
 
-  if (!correct_buffer(buffer, size, f->esp, true)) // FIXME: Check writable flag
+  if (!correct_buffer(buffer, size, f->esp, false)) // FIXME: Check writable flag
     safe_exit(ERROR);
    
   if (fid == 0)
