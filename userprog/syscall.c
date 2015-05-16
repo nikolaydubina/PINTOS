@@ -44,7 +44,6 @@ bool correct_string(void* p, void* esp);
 struct file_descr{
   int fid;              /* file id */
   tid_t pid;            /* process id */
-  bool closed;          /* syscall close was called */
   bool is_mmap;         /* there is mmap that uses this file */
   int mmap_id;          /* mmap id of corresponding mmap */
   struct file* file;    /* file struct */
@@ -314,14 +313,8 @@ static void syscall_remove(struct intr_frame* f){
 
   lock_acquire(&opened_files_lock);
 
-  struct file* rm_file = filesys_open(filename);
-  if (rm_file == NULL){
-    lock_release(&opened_files_lock);
-    f->eax = ERROR;
-    return;
-  }
-
-  inode_remove(file_get_inode(rm_file));
+  if (!filesys_remove(filename))
+    safe_exit(ERROR);
 
   lock_release(&opened_files_lock);
 }
@@ -345,12 +338,11 @@ static void syscall_open(struct intr_frame* f){
   struct file* new_file = filesys_open(filename);
 
   if (new_file == NULL)
-    f->eax = ERROR;
+    f->eax = -1;
   else{
     struct file_descr* newfile_descr = malloc(sizeof(struct file_descr));
     newfile_descr->fid = new_fid;
     newfile_descr->pid = thread_current()->tid;
-    newfile_descr->closed = false;
     newfile_descr->is_mmap = false;
     newfile_descr->mmap_id = 0;
     newfile_descr->file = new_file;
@@ -542,10 +534,13 @@ static void syscall_close(struct intr_frame* f){
     return;
   }
 
-  if (!fdescr->is_mmap)
-    file_close(fdescr->file);
-  fdescr->closed = true;
+  /* notify mmap */
+  if (fdescr->is_mmap)
+    page_update_mmap_file(fdescr->mmap_id, false);
+
+  file_close(fdescr->file);
   list_remove(&fdescr->elem);
+
   lock_release(&opened_files_lock);
 }
 
@@ -644,25 +639,25 @@ static void syscall_munmap(struct intr_frame* f){
   memcpy(&mmap_id, f->esp + 4, 4);
   
   /* closing file */
-  struct file_descr* file;
-  struct list_elem* e;
-  bool found = false;
-  for(e = list_begin(&opened_files);
-      e != list_end(&opened_files) && !found;
-      e = list_next(e))
-  {
-    struct file_descr* curr = list_entry(e, struct file_descr, elem);
-    if (curr->mmap_id == mmap_id && curr->pid == thread_current()->tid){
-      file = curr;
-      found = true;
-    }
-  }
+  //struct file_descr* file;
+  //struct list_elem* e;
+  //bool found = false;
+  //for(e = list_begin(&opened_files);
+  //    e != list_end(&opened_files) && !found;
+  //    e = list_next(e))
+  //{
+  //  struct file_descr* curr = list_entry(e, struct file_descr, elem);
+  //  if (curr->mmap_id == mmap_id && curr->pid == thread_current()->tid){
+  //    file = curr;
+  //    found = true;
+  //  }
+  //}
 
-  if (found){
-    if (file->closed)
-      file_close(file->file);
-    file->is_mmap = false;
-  }
+  //if (found){
+  //  if (file->closed)
+  //    file_close(file->file);
+  //  file->is_mmap = false;
+  //}
 
   /* removing page tables */
   if (!page_munmap(mmap_id))
