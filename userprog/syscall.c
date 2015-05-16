@@ -439,7 +439,7 @@ static void syscall_write(struct intr_frame* f){
   memcpy(&buffer, f->esp + 8, 4);
   memcpy(&size, f->esp + 12, 4);
 
-  if (!correct_buffer(buffer, size, f->esp, false)) // FIXME: Check writable flag
+  if (!correct_buffer(buffer, size, f->esp, false))
     safe_exit(ERROR);
    
   if (fid == 0)

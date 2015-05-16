@@ -251,6 +251,9 @@ bool page_mmap(int mmap_id, struct file* file, void* vaddr){
     new_page->mmap_id     = mmap_id;
     
     success &= hash_insert(&(thread_current()->page_table->table), &new_page->hash_elem) == NULL;
+    
+    /* NOT lazy loading */
+    success &= load_mmap(new_page);
 
     ofs += size;
   }
