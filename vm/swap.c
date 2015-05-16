@@ -6,8 +6,6 @@ static struct bitmap* swap_slots;   /* describes pages slots in swap disk */
 static struct semaphore free_slots; /* signals that there are free slots */
 static struct lock bitmap_lock;     /* synch access to bitmap */
 
-static inline struct semaphore* get_sema(int index);
-
 void swap_init(){
   disk = disk_get(1, 1);
   ASSERT(disk != NULL);

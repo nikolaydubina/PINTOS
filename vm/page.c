@@ -273,7 +273,8 @@ bool page_munmap(int mmap_id){
     struct page* curr = hash_entry(hash_cur(&e), struct page, hash_elem);
     
     if (curr->mmap_id == mmap_id){
-      if (curr->paddr != NULL && curr->file != NULL)
+      if (curr->paddr != NULL && curr->file != NULL &&
+          pagedir_is_dirty(thread_current()->pagedir, curr->vaddr))
         success &= file_write_at(curr->file, curr->paddr, PGSIZE, curr->ofs);
       success &= hash_delete(page_table, &curr->hash_elem) != NULL;
      
