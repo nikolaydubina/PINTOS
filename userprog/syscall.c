@@ -23,6 +23,11 @@ static void syscall_write(struct intr_frame*);
 static void syscall_seek(struct intr_frame*);
 static void syscall_tell(struct intr_frame*);
 static void syscall_close(struct intr_frame*);
+static void syscall_chdir(struct intr_frame*);
+static void syscall_mkdir(struct intr_frame*);
+static void syscall_readdir(struct intr_frame*);
+static void syscall_isdir(struct intr_frame*);
+static void syscall_inumber(struct intr_frame*);
 
 static struct file_descr* lookup_file(int fid);
 
@@ -104,19 +109,27 @@ syscall_handler (struct intr_frame* f){
     case SYS_CLOSE:   
       syscall_close(f);
       break;
-    default:
-      printf("ERROR!\n");
-
     /* Project 3 and optionally project 4. */
     //SYS_MMAP,                   /* Map a file into memory. */
     //SYS_MUNMAP,                 /* Remove a memory mapping. */
-
     /* Project 4 only. */
-    //SYS_CHDIR,                  /* Change the current directory. */
-    //SYS_MKDIR,                  /* Create a directory. */
-    //SYS_READDIR,                /* Reads a directory entry. */
-    //SYS_ISDIR,                  /* Tests if a fd represents a directory. */
-    //SYS_INUMBER                 /* Returns the inode number for a fd. */
+    case SYS_CHDIR:                  
+      syscall_chdir(f);
+      break;
+    case SYS_MKDIR:                  
+      syscall_mkdir(f);
+      break;
+    case SYS_READDIR:                
+      syscall_readdir(f);
+      break;
+    case SYS_ISDIR:                  
+      syscall_isdir(f);
+      break;
+    case SYS_INUMBER:                 
+      syscall_inumber(f);
+      break;
+    default:
+      printf("ERROR!\n");
   }
 }
 
@@ -484,6 +497,118 @@ static void syscall_close(struct intr_frame* f){
   file_close(fdescr->file);
   list_remove(&fdescr->elem);
   lock_release(&opened_files_lock);
+}
+
+/* Change the current directory. */
+static void syscall_chdir(struct intr_frame* f){
+  const char* dir;
+
+  if (!(correct_pointer(f->esp) &&
+        correct_pointer(f->esp + 4)))
+    safe_exit(-1);
+
+  memcpy(&dir, f->esp + 4, 4);
+
+  if (!(correct_pointer(dir) && dir != NULL))
+    safe_exit(-1);
+   
+  bool success = true;
+
+  // TODO: check for correctness
+  // TODO: add traversal
+
+  f->eax = success;
+  return;
+}
+
+/* Create a directory. */
+static void syscall_mkdir(struct intr_frame* f){
+  const char* dir;
+
+  if (!(correct_pointer(f->esp) &&
+        correct_pointer(f->esp + 4)))
+    safe_exit(-1);
+
+  memcpy(&dir, f->esp + 4, 4);
+
+  if (!(correct_pointer(dir) && dir != NULL))
+    safe_exit(-1);
+   
+  bool success = true;
+
+  // TODO: check for correctness
+  // TODO: add traversal
+
+  f->eax = success;
+  return;
+}
+
+/* Reads a directory entry. */
+static void syscall_readdir(struct intr_frame* f){
+  int fd;
+  const char* dir;
+
+  if (!(correct_pointer(f->esp) &&
+        correct_pointer(f->esp + 4) &&
+        correct_pointer(f->esp + 8)))
+    safe_exit(-1);
+
+  memcpy(&fd, f->esp + 4, 4);
+  memcpy(&dir, f->esp + 8, 4);
+
+  if (!(correct_pointer(dir) && dir != NULL))
+    safe_exit(-1);
+   
+  bool success = true;
+
+  // TODO: check for correctness
+  // TODO: add traversal
+
+  f->eax = success;
+  return;
+}
+
+/* Tests if a fd represents a directory. */
+static void syscall_isdir(struct intr_frame* f){
+  int fd;
+
+  if (!(correct_pointer(f->esp) &&
+        correct_pointer(f->esp + 4)))
+    safe_exit(-1);
+
+  memcpy(&fd, f->esp + 4, 4);
+   
+  bool success = true;
+
+  // TODO: check for correctness
+  // TODO: add traversal
+
+  f->eax = success;
+  return;
+}
+
+/* Returns the inode number for a fd. */
+static void syscall_inumber(struct intr_frame* f){
+  int fd;
+
+  if (!(correct_pointer(f->esp) &&
+        correct_pointer(f->esp + 4)))
+    safe_exit(-1);
+
+  memcpy(&fd, f->esp + 4, 4);
+   
+  bool success = true;
+  int inumber = 0;
+
+  // TODO: check for correctness
+  // TODO: add traversal
+
+  if (!success)
+    f->eax = -1;
+  else
+    f->eax = inumber;
+
+  return;
 }
 
 /* helper function. retrieves file descrtiptor

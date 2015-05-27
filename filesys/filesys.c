@@ -90,7 +90,38 @@ filesys_remove (const char *name)
 
   return success;
 }
-
+
+/* directories management */
+bool filesys_chdir(const char* name){
+  bool success = true;
+
+  return success;
+};
+
+bool filesys_mkdir(const char* name){
+  bool success = true;
+
+  return success;
+};
+
+bool filesys_readdir(int fd, const char* name){
+  bool success = true;
+
+  return success;
+};
+
+bool filesys_isdir(int fd){
+  bool success = true;
+
+  return success;
+};
+
+int filesys_inumber(int fd){
+  int retin = 0;
+
+  return retin;
+};
+
 /* Formats the file system. */
 static void
 do_format (void)
