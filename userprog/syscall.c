@@ -8,6 +8,10 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 
+#define DIR_MAX_NAME 14
+#define DIR_MAX_PATH 500
+#define DIR_MAX_DEPTH 100
+
 static void syscall_handler (struct intr_frame*);
 
 static void syscall_halt(struct intr_frame*);
@@ -497,6 +501,38 @@ static void syscall_close(struct intr_frame* f){
   file_close(fdescr->file);
   list_remove(&fdescr->elem);
   lock_release(&opened_files_lock);
+}
+
+static bool traverseto(const char* dirname){
+  bool success = true;
+  
+  bool absolute = dirname[0] == '/';
+  int i = 0;
+  int size = 0;
+  const char path[DIR_MAX_DEPTH][DIR_MAX_NAME];
+
+  char *token, *save_ptr;
+  for (token = strtok_r(dirname, "/", &save_ptr);
+      token != NULL && i <= DIR_MAX_DEPTH;
+      token = strtok_r(NULL, "/", &save_ptr))
+  {
+    int len_token = strlen(token) + 1; /* FIXME */
+
+    if (size + len_token > DIR_MAX_PATH ||
+        len_token > DIR_MAX_NAME){
+      success = false;
+      return success;
+    }
+    else{
+      strlcpy(&(path[i]), token, len_token);
+      size += len_token;
+      i++;
+    }
+  }
+ 
+  /* traversing path */
+
+  return success;
 }
 
 /* Change the current directory. */
