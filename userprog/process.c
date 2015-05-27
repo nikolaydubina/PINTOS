@@ -25,6 +25,7 @@
 #define MAX_ARGSIZE 4000
 
 static struct args_descr{
+  struct dir* current_dir;      /* parents dir. NULL if no parent */
   int argc;
   char **argv;
   bool loaded;
@@ -86,6 +87,7 @@ process_execute (const char *raw_args)
   strlcpy (fn_copy, raw_args, PGSIZE);
 
   args_descr* args = malloc(sizeof(args_descr));
+  args->current_dir = thread_current()->current_dir;
   args->argc = 0;
   args->argv = malloc(MAX_ARGC * sizeof(char*));
   int size = sizeof(char**);  /* to limit size of arguments */
@@ -156,6 +158,13 @@ start_process (void *args_r)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp, args);
+
+  /* updating current dir to root */
+  if (args->current_dir != NULL)
+    thread_current()->current_dir = dir_reopen(args->current_dir);
+  else
+    thread_current()->current_dir = dir_open_root();
+
 
   /* signaling to parent */
   args->loaded = success;
