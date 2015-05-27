@@ -7,6 +7,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "lib/string.h"
 
 #define DIR_MAX_NAME 14
 #define DIR_MAX_PATH 500
@@ -507,13 +508,13 @@ static bool traverseto(const char* dirname){
   bool success = true;
   
   bool absolute = dirname[0] == '/';
-  int i = 0;
+  int count = 0;
   int size = 0;
   const char path[DIR_MAX_DEPTH][DIR_MAX_NAME];
 
   char *token, *save_ptr;
   for (token = strtok_r(dirname, "/", &save_ptr);
-      token != NULL && i <= DIR_MAX_DEPTH;
+      token != NULL && count <= DIR_MAX_DEPTH;
       token = strtok_r(NULL, "/", &save_ptr))
   {
     int len_token = strlen(token) + 1; /* FIXME */
@@ -524,13 +525,36 @@ static bool traverseto(const char* dirname){
       return success;
     }
     else{
-      strlcpy(&(path[i]), token, len_token);
+      strlcpy(&(path[count]), token, len_token);
       size += len_token;
-      i++;
+      count++;
     }
   }
  
   /* traversing path */
+  struct dir* curr;
+  if (absolute)
+    curr = dir_open_root();
+  else
+    curr = dir_reopen(thread_current()->current_dir);
+
+  int i;
+  for(i = 0; i < count && success; i++){
+    struct inode* next;
+    if (strcmp(path[i], "..") == 0){
+      /* look for parent dir */
+    }
+    else if (strcmp(path[i], ".") == 0){
+      /* current dir - ignore */
+      continue;
+    }
+    else {
+      /* look for child dir */
+      success = dir_lookup(curr, path[i], &next);
+    }
+    dir_close(curr);
+    curr = dir_open(next);
+  }
 
   return success;
 }
