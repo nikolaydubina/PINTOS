@@ -17,7 +17,8 @@ struct inode;
 /* A directory. */
 struct dir 
   {
-    struct inode *inode;                /* Backing store. */
+    struct inode* inode;                /* Backing store. */
+    struct inode* parent;               /* Inode of parent */
     off_t pos;                          /* Current position. */
   };
 
