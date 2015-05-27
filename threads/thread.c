@@ -451,7 +451,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->exit_status = -1;
   t->exec_file = NULL;
 
-  t->current_dir = dir_open_root(); 
+  t->current_dir = NULL; //dir_open_root(); 
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
