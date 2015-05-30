@@ -120,6 +120,9 @@ filesys_remove (const char *name)
   struct dir* dir;
   char dirname[DIR_MAX_NAME];
 
+  if (strcmp(name, "/") == 0)
+    return false;
+
   if (!traverse(name, &dir, &dirname))
     return false;
 
@@ -252,6 +255,9 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
 
   strlcpy(dirnamecpy, dirname, len);
 
+  if (strcmp(dirnamecpy, "") == 0)
+    return false;
+
   char *token, *save_ptr;
   int len_token;
   for (token = strtok_r(dirnamecpy, "/", &save_ptr);
@@ -294,7 +300,9 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
     else 
       success = dir_lookup(curr, path[i], &next);
 
+    success = inode_isdir(next);
     dir_close(curr);
+
     if (success)
       curr = dir_open(next);
   }
