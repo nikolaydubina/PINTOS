@@ -10,10 +10,6 @@
 #include "filesys/filesys.h"
 #include "userprog/syscall.h"
 
-#define DIR_MAX_NAME NAME_MAX
-#define DIR_MAX_PATH 500
-#define DIR_MAX_DEPTH 100
-
 static void syscall_handler (struct intr_frame*);
 
 static void syscall_halt(struct intr_frame*);
