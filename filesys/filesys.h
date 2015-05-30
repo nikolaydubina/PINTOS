@@ -3,10 +3,15 @@
 
 #include <stdbool.h>
 #include "filesys/off_t.h"
+#include "filesys/directory.h"
 
 /* Sectors of system file inodes. */
 #define FREE_MAP_SECTOR 0       /* Free map file inode sector. */
 #define ROOT_DIR_SECTOR 1       /* Root directory file inode sector. */
+
+#define DIR_MAX_DEPTH 100
+#define DIR_MAX_NAME NAME_MAX
+#define DIR_MAX_PATH DIR_MAX_DEPTH * DIR_MAX_NAME
 
 /* Disk used for file system. */
 extern struct disk *filesys_disk;

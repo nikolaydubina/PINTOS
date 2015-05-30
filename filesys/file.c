@@ -168,10 +168,10 @@ file_tell (struct file *file)
 }
 
 /* returns inumber of corresponding to file inode */
-uint32_t file_get_inumber(struct file* file){
+uint32_t file_getinumber(struct file* file){
   ASSERT(file != NULL);
 
-  return file->inode->sector;
+  return inode_get_sector(file->inode);
 }
 
 /* true if file is dir, otherwise false */

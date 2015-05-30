@@ -535,7 +535,7 @@ static void syscall_mkdir(struct intr_frame* f){
 /* Reads a directory entry. */
 static void syscall_readdir(struct intr_frame* f){
   int fd;
-  const char* dir;
+  char* dir;
 
   if (!(correct_pointer(f->esp) &&
         correct_pointer(f->esp + 4) &&
@@ -545,25 +545,25 @@ static void syscall_readdir(struct intr_frame* f){
   memcpy(&fd, f->esp + 4, 4);
   memcpy(&dir, f->esp + 8, 4);
 
-  if (!(correct_pointer(dir) && dir != NULL))
+  if (!(correct_pointer(dir) &&
+        correct_pointer(dir + DIR_MAX_NAME + 1) && 
+        dir != NULL))
     safe_exit(-1);
    
-  bool success = true;
-
   struct file_descr* entry = lookup_file(fd);
-  
-  if(!filesys_isdir(entry->file))
-    success = false;
-  else{
-    //TODO
-    // READ 1 entry 
-
-    ;
+ 
+  if (entry == NULL){
+    f->eax = false;
+    return;
   }
 
+  if (!filesys_isdir(entry->file)){
+    f->eax = false;
+    return;
+  }
 
-  f->eax = success;
-  return;
+  f->eax = filesys_readdir(entry->file, dir);
+  return true;
 }
 
 /* Tests if a fd represents a directory. */

@@ -165,7 +165,7 @@ inode_reopen (struct inode *inode)
 
 /* if current inode is dir, then opens inode for it's parent dir */
 struct inode *inode_open_parent(struct inode* current){
-  if (!inode->isdir)
+  if (!current->isdir)
     return NULL;
 
   return inode_open(current->parent_sector);
@@ -176,6 +176,9 @@ uint32_t inode_get_inumber (const struct inode *inode){
   return inode->sector;
 }
 
+disk_sector_t inode_get_sector(const struct inode* inode){
+  return inode->sector;
+}
 /* Closes INODE and writes it to disk.
    If this was the last reference to INODE, frees its memory.
    If INODE was also a removed inode, frees its blocks. */
