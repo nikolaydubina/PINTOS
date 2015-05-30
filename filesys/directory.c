@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <list.h>
-#include "filesys/filesys.h"
 #include "threads/malloc.h"
 
 extern struct dir;
@@ -18,9 +17,9 @@ struct dir_entry
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
-dir_create (disk_sector_t sector, size_t entry_cnt) 
+dir_create (disk_sector_t sector, size_t entry_cnt, disk_sector_t parent) 
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  return inode_create (sector, entry_cnt * sizeof (struct dir_entry), true, parent);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -122,6 +121,19 @@ dir_lookup (const struct dir *dir, const char *name,
     *inode = inode_open (e.inode_sector);
   else
     *inode = NULL;
+
+  return *inode != NULL;
+}
+
+/* returns true if dir has parent dir
+ * otherwise false
+ * sets indode accordingly.
+ * The caller must close *INODE */
+bool dir_lookup_parent (const struct dir* dir, struct inode** inode){
+  ASSERT(dir != NULL);
+  ASSERT(inode != NULL);
+
+  *inode = inode_open_parent(dir->inode);
 
   return *inode != NULL;
 }

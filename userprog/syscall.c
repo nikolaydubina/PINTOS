@@ -1,15 +1,16 @@
-#include "userprog/syscall.h"
 #include <stdio.h>
 #include <lib/kernel/console.h>
 #include <syscall-nr.h>
+#include "lib/string.h"
 #include "threads/malloc.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
-#include "lib/string.h"
+#include "filesys/filesys.h"
+#include "userprog/syscall.h"
 
-#define DIR_MAX_NAME 14
+#define DIR_MAX_NAME NAME_MAX
 #define DIR_MAX_PATH 500
 #define DIR_MAX_DEPTH 100
 
@@ -234,7 +235,7 @@ static void syscall_create(struct intr_frame* f){
 
   if (!(correct_pointer(file) && file != NULL))
     safe_exit(-1);
-    
+
   lock_acquire(&opened_files_lock);
   bool success = filesys_create(file, initial_size);
   f->eax = success;
@@ -256,14 +257,11 @@ static void syscall_remove(struct intr_frame* f){
 
   lock_acquire(&opened_files_lock);
 
-  struct file* rm_file = filesys_open(filename);
-  if (rm_file == NULL){
+  if (!filesys_remove(filename)){
     lock_release(&opened_files_lock);
     f->eax = -1;
     return;
   }
-
-  inode_remove(file_get_inode(rm_file));
 
   lock_release(&opened_files_lock);
 }
@@ -504,61 +502,6 @@ static void syscall_close(struct intr_frame* f){
   lock_release(&opened_files_lock);
 }
 
-static bool traverseto(const char* dirname){
-  bool success = true;
-  
-  bool absolute = dirname[0] == '/';
-  int count = 0;
-  int size = 0;
-  const char path[DIR_MAX_DEPTH][DIR_MAX_NAME];
-
-  char *token, *save_ptr;
-  for (token = strtok_r(dirname, "/", &save_ptr);
-      token != NULL && count <= DIR_MAX_DEPTH;
-      token = strtok_r(NULL, "/", &save_ptr))
-  {
-    int len_token = strlen(token) + 1; /* FIXME */
-
-    if (size + len_token > DIR_MAX_PATH ||
-        len_token > DIR_MAX_NAME){
-      success = false;
-      return success;
-    }
-    else{
-      strlcpy(&(path[count]), token, len_token);
-      size += len_token;
-      count++;
-    }
-  }
- 
-  /* traversing path */
-  struct dir* curr;
-  if (absolute)
-    curr = dir_open_root();
-  else
-    curr = dir_reopen(thread_current()->current_dir);
-
-  int i;
-  for(i = 0; i < count && success; i++){
-    struct inode* next;
-    if (strcmp(path[i], "..") == 0){
-      /* look for parent dir */
-    }
-    else if (strcmp(path[i], ".") == 0){
-      /* current dir - ignore */
-      continue;
-    }
-    else {
-      /* look for child dir */
-      success = dir_lookup(curr, path[i], &next);
-    }
-    dir_close(curr);
-    curr = dir_open(next);
-  }
-
-  return success;
-}
-
 /* Change the current directory. */
 static void syscall_chdir(struct intr_frame* f){
   const char* dir;
@@ -572,12 +515,7 @@ static void syscall_chdir(struct intr_frame* f){
   if (!(correct_pointer(dir) && dir != NULL))
     safe_exit(-1);
    
-  bool success = true;
-
-  // TODO: check for correctness
-  // TODO: add traversal
-
-  f->eax = success;
+  f->eax = filesys_chdir(dir);
   return;
 }
 
@@ -594,12 +532,7 @@ static void syscall_mkdir(struct intr_frame* f){
   if (!(correct_pointer(dir) && dir != NULL))
     safe_exit(-1);
    
-  bool success = true;
-
-  // TODO: check for correctness
-  // TODO: add traversal
-
-  f->eax = success;
+  f->eax = filesys_mkdir(dir);
   return;
 }
 
@@ -621,8 +554,17 @@ static void syscall_readdir(struct intr_frame* f){
    
   bool success = true;
 
-  // TODO: check for correctness
-  // TODO: add traversal
+  struct file_descr* entry = lookup_file(fd);
+  
+  if(!filesys_isdir(entry->file))
+    success = false;
+  else{
+    //TODO
+    // READ 1 entry 
+
+    ;
+  }
+
 
   f->eax = success;
   return;
@@ -638,12 +580,9 @@ static void syscall_isdir(struct intr_frame* f){
 
   memcpy(&fd, f->esp + 4, 4);
    
-  bool success = true;
-
-  // TODO: check for correctness
-  // TODO: add traversal
-
-  f->eax = success;
+  struct file_descr* entry = lookup_file(fd);
+  
+  f->eax = filesys_isdir(entry->file);
   return;
 }
 
@@ -657,17 +596,12 @@ static void syscall_inumber(struct intr_frame* f){
 
   memcpy(&fd, f->esp + 4, 4);
    
-  bool success = true;
-  int inumber = 0;
+  struct file_descr* entry = lookup_file(fd);
 
-  // TODO: check for correctness
-  // TODO: add traversal
-
-  if (!success)
-    f->eax = -1;
+  if (entry != NULL)
+    f->eax = filesys_getinumber(entry->file);
   else
-    f->eax = inumber;
-
+    f->eax = -1;
   return;
 }
 
