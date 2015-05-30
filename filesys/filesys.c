@@ -67,7 +67,12 @@ filesys_create (const char *name, off_t initial_size)
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, false, 0)
-                  && dir_add (dir, name, inode_sector));
+                  && dir_add (dir, dirname, inode_sector));
+
+  //printf("DEBUG: filesys_create: name=%s dirname=%s dir=%p\n", name, dirname, dir);
+  //printf("DEBUG: filesys_create: dir sector=%p\n", inode_get_sector(dir_get_inode(dir)));
+  //printf("DEBUG: filesys_create: f   sector=%p\n", inode_sector);
+
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
   dir_close (dir);
@@ -89,13 +94,19 @@ filesys_open (const char *name)
 
   if (!traverse(name, &dir, &dirname))
     return false;
+  //printf("DEBUG: filesys_open: name=%s dirname=%s dir=%p\n", name, dirname, dir);
+  //printf("DEBUG: filesys_open: dir sector=%p\n", inode_get_sector(dir_get_inode(dir)));
 
   struct inode* inode = NULL;
+  bool success = true;
   if (dir != NULL)
-    dir_lookup (dir, name, &inode);
+    success = dir_lookup (dir, dirname, &inode);
   dir_close (dir);
 
-  return file_open (inode);
+  if (success)
+    return file_open (inode);
+  else
+    return false;
 }
 
 /* Deletes the file named NAME.
@@ -130,10 +141,6 @@ do_format (void)
   printf ("done.\n");
 }
 
-//TODO: inode does not check for ROOT_DIR_SECTOR on go parent
-//TODO: before indode close. children should be nofied of change if any.
-//      -> if dir removes. than all children should be closed and removed as well.
-
 /* directories management */
 bool filesys_chdir(const char* name){
   struct dir* parent;
@@ -142,10 +149,14 @@ bool filesys_chdir(const char* name){
   if (!traverse(name, &parent, &dirname))
     return false;
 
+  //printf("DEBUG: traversed: parent=%p dirname=%s \n", parent, dirname);
+
   /* lookup dir to change */
   struct inode* idir;
-  if (dir_lookup(parent, dirname, &idir))
+  if (!dir_lookup(parent, dirname, &idir))
     return false;
+
+  //printf("DEBUG: found \n");
 
   dir_close(thread_current()->current_dir);
 
@@ -176,6 +187,8 @@ bool filesys_mkdir(const char* name){
                   && free_map_allocate (1, &newsector)
                   && dir_create(newsector, 16, parent_sector)
                   && dir_add (parent, dirname, newsector));
+
+  //printf("DEBUG: mkdir: parent_sector=%p child_sector=%p\n", parent_sector, newsector);
 
   if (!success && newsector != 0) 
     free_map_release(newsector, 1);
@@ -228,19 +241,28 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
   bool absolute = dirname[0] == '/';
   int count = 0;
   int size = 0;
-  const char path[DIR_MAX_DEPTH][DIR_MAX_NAME];
+  char path[DIR_MAX_DEPTH][DIR_MAX_NAME];
 
   /* parsing string */
+  char dirnamecpy[DIR_MAX_PATH];
+
+  int len = strlen(dirname) + 1;
+  if (len > DIR_MAX_PATH)
+    return false;
+
+  strlcpy(dirnamecpy, dirname, len);
+
   char *token, *save_ptr;
   int len_token;
-  for (token = strtok_r(dirname, "/", &save_ptr);
+  for (token = strtok_r(dirnamecpy, "/", &save_ptr);
       token != NULL && success;
       token = strtok_r(NULL, "/", &save_ptr))
   {
+    //printf("DEBUG: loop: %d %s\n", count, token);
     len_token = strlen(token) + 1;
 
     if (size + len_token > DIR_MAX_PATH ||
-        count <= DIR_MAX_DEPTH ||
+        count > DIR_MAX_DEPTH ||
         len_token > DIR_MAX_NAME)
     {
       return false;
@@ -253,10 +275,11 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
   }
 
   strlcpy(entryname, &(path[count - 1]), len_token);
+  //printf("DEBUG: %s | last=%s\n", dirnamecpy, entryname);
  
   /* traversing path */
   struct dir* curr;
-  if (absolute)
+  if (absolute || thread_current()->current_dir == NULL) // FIXME
     curr = dir_open_root();
   else
     curr = dir_reopen(thread_current()->current_dir);
