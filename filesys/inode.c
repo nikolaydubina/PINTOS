@@ -374,3 +374,7 @@ bool inode_isdir(const struct inode* inode){
 disk_sector_t get_parent_sector(const struct inode* inode){
   return inode->parent_sector;
 }
+
+bool inode_isused(const struct inode* inode){
+  return inode->open_cnt > 0;
+}

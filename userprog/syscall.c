@@ -255,7 +255,7 @@ static void syscall_remove(struct intr_frame* f){
 
   if (!filesys_remove(filename)){
     lock_release(&opened_files_lock);
-    f->eax = -1;
+    f->eax = 0;
     return;
   }
 
