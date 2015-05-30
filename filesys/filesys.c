@@ -10,6 +10,10 @@
 #include "filesys/file.h"
 #include "filesys/directory.h"
 
+#define DIR_MAX_DEPTH 100
+#define DIR_MAX_NAME NAME_MAX
+#define DIR_MAX_PATH DIR_MAX_DEPTH * DIR_MAX_NAME
+
 /* The disk that contains the file system. */
 struct disk *filesys_disk;
 
@@ -111,45 +115,87 @@ do_format (void)
 
 /* directories management */
 bool filesys_chdir(const char* name){
-  bool success = true;
-  // TODO
-  return success;
+  struct dir* parent;
+  char dirname[DIR_MAX_NAME];
+
+  if (!traverse(name, &parent, &dirname))
+    return false;
+
+  /* lookup dir to change */
+  struct inode* idir;
+  if (dir_lookup(parent, dirname, &idir))
+    return false;
+
+  dir_close(thread_current()->current_dir);
+
+  struct dir* dir = dir_open(idir);
+  if (dir == NULL)
+    return false;
+  
+  thread_current()->current_dir = dir;
+
+  return true;
 };
 
 bool filesys_mkdir(const char* name){
-  bool success = true;
- 
-  disk_sector_t dir = 1;
-  disk_sector_t parent = 1;
+  struct dir* parent;
+  char dirname[DIR_MAX_NAME];
 
-  success = dir_create(dir, 16, parent);
+  if (!traverse(name, &parent, &dirname))
+    return false;
+
+  /* check if it already exists */
+  struct inode* idir;
+  if (dir_lookup(parent, dirname, &idir))
+    return false;
+
+  disk_sector_t newsector = 0;
+  disk_sector_t parent_sector = dir_get_inode(parent)->sector;
+  bool success = (parent != NULL
+                  && free_map_allocate (1, &newsector)
+                  && dir_create(newsector, 16, parent_sector)
+                  && dir_add (parent, dirname, newsector));
+
+  if (!success && newsector != 0) 
+    free_map_release(newsector, 1);
+  dir_close(parent);
+
   return success;
 };
 
 bool filesys_readdir(int fd, char* name){
-  bool success = true;
-  // TODO
-  return success;
+  struct dir* parent;
+  char dirname[DIR_MAX_NAME];
+
+  if (!traverse(name, &parent, &dirname))
+    return false;
+
+  /* check if it already exists */
+  struct inode* idir;
+  if (dir_lookup(parent, dirname, &idir))
+    return false;
+
+
+
+  return true;
 };
 
 bool filesys_isdir(struct file* file){
   ASSERT(file != NULL);
-
   return file_isdir(file);
 }
 
 uint32_t filesys_getinumber(struct file* file){
   ASSERT(file != NULL);
-
   return file_getinumber(file);
 }
 
 /* going through directory tree, by path specified in dirname
- * if reaches final directory
- *  - file, length of path - 1
- *  - dir,  length of path
- * changes dir paramater */
-static bool traverse(const char* dirname, bool isdir, struct dir* dir){
+ * stops when reaches directory that contain specified file or directory
+ * i.e. if target file is directory, it is not opened
+ * if reaches final directory, changes dir paramater
+ * NOTE: caller should close dir */
+static bool traverse(const char* dirname, struct dir** dir, char* entryname){
   bool success = true;
   
   bool absolute = dirname[0] == '/';
@@ -157,17 +203,19 @@ static bool traverse(const char* dirname, bool isdir, struct dir* dir){
   int size = 0;
   const char path[DIR_MAX_DEPTH][DIR_MAX_NAME];
 
+  /* parsing string */
   char *token, *save_ptr;
   for (token = strtok_r(dirname, "/", &save_ptr);
-      token != NULL && count <= DIR_MAX_DEPTH;
+      token != NULL && success;
       token = strtok_r(NULL, "/", &save_ptr))
   {
     int len_token = strlen(token) + 1;
 
     if (size + len_token > DIR_MAX_PATH ||
-        len_token > DIR_MAX_NAME){
-      success = false;
-      return success;
+        count <= DIR_MAX_DEPTH ||
+        len_token > DIR_MAX_NAME)
+    {
+      return false;
     }
     else{
       strlcpy(&(path[count]), token, len_token);
@@ -175,6 +223,8 @@ static bool traverse(const char* dirname, bool isdir, struct dir* dir){
       count++;
     }
   }
+
+  strlcpy(entryname, &(path[count - 1]), len_token);
  
   /* traversing path */
   struct dir* curr;
@@ -184,8 +234,7 @@ static bool traverse(const char* dirname, bool isdir, struct dir* dir){
     curr = dir_reopen(thread_current()->current_dir);
 
   int i;
-  int ni = isdir ? count : count - 1;
-  for(i = 0; i < ni && success; i++){
+  for(i = 0; (i < count - 1) && success; i++){
     struct inode* next;
     if (strcmp(path[i], "..") == 0)
       success = dir_parent(curr, &next);
@@ -199,12 +248,8 @@ static bool traverse(const char* dirname, bool isdir, struct dir* dir){
       curr = dir_open(next);
   }
   
-  /* check if file present */
-  if (!isdir)
-
-
   if (success)
-    dir = curr;
+    *dir = curr;
 
   return success;
 }
