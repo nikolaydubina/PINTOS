@@ -4,21 +4,17 @@
 #include <string.h>
 #include "lib/string.h"
 #include "devices/disk.h"
+#include "threads/thread.h"
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/cache.h"
 #include "filesys/file.h"
-#include "filesys/directory.h"
-
-#define DIR_MAX_DEPTH 100
-#define DIR_MAX_NAME NAME_MAX
-#define DIR_MAX_PATH DIR_MAX_DEPTH * DIR_MAX_NAME
 
 /* The disk that contains the file system. */
 struct disk *filesys_disk;
 
 static void do_format (void);
-static bool traverse(const char* dirname);
+static bool traverse(const char* dirname, struct dir** dir, char* entryname);
 
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
@@ -47,14 +43,26 @@ filesys_done (void)
   cache_writeall();
   free_map_close ();
 }
-
+
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
 bool
-filesys_create (const char *name, off_t initial_size, struct dir* dir) 
+filesys_create (const char *name, off_t initial_size) 
 {
+  /* lookup dir */
+  struct dir* dir;
+  char dirname[DIR_MAX_NAME];
+
+  if (!traverse(name, &dir, &dirname))
+    return false;
+
+  /* check if file already exists */
+  struct inode* idir;
+  if (dir_lookup(dir, dirname, &idir))
+    return false;
+
   disk_sector_t inode_sector = 0;
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
@@ -73,10 +81,16 @@ filesys_create (const char *name, off_t initial_size, struct dir* dir)
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 struct file *
-filesys_open (const char *name, struct dir* dir)
+filesys_open (const char *name)
 {
-  struct inode *inode = NULL;
+  /* lookup dir */
+  struct dir* dir;
+  char dirname[DIR_MAX_NAME];
 
+  if (!traverse(name, &dir, &dirname))
+    return false;
+
+  struct inode* inode = NULL;
   if (dir != NULL)
     dir_lookup (dir, name, &inode);
   dir_close (dir);
@@ -89,8 +103,15 @@ filesys_open (const char *name, struct dir* dir)
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 bool
-filesys_remove (const char *name, struct dir* dir) 
+filesys_remove (const char *name) 
 {
+  /* lookup dir */
+  struct dir* dir;
+  char dirname[DIR_MAX_NAME];
+
+  if (!traverse(name, &dir, &dirname))
+    return false;
+
   bool success = dir != NULL && dir_remove (dir, name);
   dir_close (dir); 
 
@@ -150,7 +171,7 @@ bool filesys_mkdir(const char* name){
     return false;
 
   disk_sector_t newsector = 0;
-  disk_sector_t parent_sector = dir_get_inode(parent)->sector;
+  disk_sector_t parent_sector = inode_get_sector(dir_get_inode(parent));
   bool success = (parent != NULL
                   && free_map_allocate (1, &newsector)
                   && dir_create(newsector, 16, parent_sector)
@@ -163,21 +184,27 @@ bool filesys_mkdir(const char* name){
   return success;
 };
 
-bool filesys_readdir(int fd, char* name){
+bool filesys_readdir(struct file* file, char* name){
   struct dir* parent;
   char dirname[DIR_MAX_NAME];
 
   if (!traverse(name, &parent, &dirname))
     return false;
 
-  /* check if it already exists */
+  /* check if folder exists */
   struct inode* idir;
-  if (dir_lookup(parent, dirname, &idir))
+  if (!dir_lookup(parent, dirname, &idir))
+    return false;
+  dir_close(parent);
+
+  struct dir* dir = dir_open(idir);
+  if (dir == NULL)
     return false;
 
+  bool success = dir_readdir(dir, name); 
 
-
-  return true;
+  dir_close(dir);
+  return success;
 };
 
 bool filesys_isdir(struct file* file){
@@ -205,11 +232,12 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
 
   /* parsing string */
   char *token, *save_ptr;
+  int len_token;
   for (token = strtok_r(dirname, "/", &save_ptr);
       token != NULL && success;
       token = strtok_r(NULL, "/", &save_ptr))
   {
-    int len_token = strlen(token) + 1;
+    len_token = strlen(token) + 1;
 
     if (size + len_token > DIR_MAX_PATH ||
         count <= DIR_MAX_DEPTH ||
@@ -237,7 +265,7 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
   for(i = 0; (i < count - 1) && success; i++){
     struct inode* next;
     if (strcmp(path[i], "..") == 0)
-      success = dir_parent(curr, &next);
+      success = dir_lookup_parent(curr, &next);
     else if (strcmp(path[i], ".") == 0)
       continue;
     else 

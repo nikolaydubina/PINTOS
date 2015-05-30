@@ -25,5 +25,6 @@ off_t inode_length (const struct inode *);
 
 uint32_t inode_get_inumber(const struct inode*);
 bool inode_isdir(const struct inode*);
+disk_sector_t inode_get_sector(const struct inode*);
 
 #endif /* filesys/inode.h */

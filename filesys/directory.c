@@ -3,6 +3,7 @@
 #include <string.h>
 #include <list.h>
 #include "threads/malloc.h"
+#include "filesys/filesys.h"
 
 extern struct dir;
 
@@ -25,8 +26,7 @@ dir_create (disk_sector_t sector, size_t entry_cnt, disk_sector_t parent)
 /* Opens and returns the directory for the given INODE, of which
    it takes ownership.  Returns a null pointer on failure. */
 struct dir *
-dir_open (struct inode *inode) 
-{
+dir_open (struct inode *inode) {
   struct dir *dir = calloc (1, sizeof *dir);
   if (inode != NULL && dir != NULL)
     {
