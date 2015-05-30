@@ -20,8 +20,8 @@ bool filesys_remove (const char *name);
 /* directories management */
 bool filesys_chdir(const char* name);
 bool filesys_mkdir(const char* name);
-bool filesys_readdir(int fd, const char* name);
-bool filesys_isdir(int fd);
-int filesys_inumber(int fd);
+bool filesys_readdir(struct file* file, char* name);
+bool filesys_isdir(struct file* file);
+uint32_t filesys_getinumber(struct file* file);
 
 #endif /* filesys/filesys.h */
