@@ -37,7 +37,7 @@ bool dir_readdir (struct dir *, char name[NAME_MAX + 1]);
 
 /* utilities */
 bool dir_isempty(struct dir* dir);
-struct inode *dir_get_inodE (struct dir* dir);
+struct inode *dir_get_inode (struct dir* dir);
 bool dir_isroot(struct dir* dir);
 bool dir_issame(struct dir* dira, struct dir* dirb);
 
