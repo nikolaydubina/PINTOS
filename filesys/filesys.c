@@ -58,6 +58,11 @@ filesys_create (const char *name, off_t initial_size)
   if (!traverse(name, &dir, &dirname))
     return false;
 
+  if (strcmp(dirname, "") == 0 
+      || strcmp(dirname, ".") == 0 
+      || strcmp(dirname, "..") == 0)
+    return false;
+
   /* check if file already exists */
   struct inode* idir;
   if (dir_lookup(dir, dirname, &idir))
@@ -93,20 +98,45 @@ filesys_open (const char *name)
   char dirname[DIR_MAX_NAME];
 
   if (!traverse(name, &dir, &dirname))
-    return false;
+    return NULL;
+  if (dir == NULL)
+    return NULL;
+
   //printf("DEBUG: filesys_open: name=%s dirname=%s dir=%p\n", name, dirname, dir);
   //printf("DEBUG: filesys_open: dir sector=%p\n", inode_get_sector(dir_get_inode(dir)));
 
-  struct inode* inode = NULL;
   bool success = true;
-  if (dir != NULL)
-    success = dir_lookup (dir, dirname, &inode);
-  dir_close (dir);
+  struct inode* inode = NULL;
+  bool isfile = strcmp(dirname, "") != 0 
+                && strcmp(dirname, ".") != 0 
+                && strcmp(dirname, "..") != 0;
 
-  if (success)
-    return file_open (inode);
+  if (strcmp(dirname, "") == 0)
+    return dir_isroot(dir) ? dir_open_root() : NULL;
+  else if (strcmp(dirname, ".") == 0)
+    return dir;
+  else if (strcmp(dirname, "..") == 0)
+    success = dir_lookup_parent(dir, &inode);
   else
-    return false;
+    success = dir_lookup (dir, dirname, &inode);
+
+  dir_close(dir);
+  if (!success || inode == NULL)
+    return NULL;
+
+  if (isfile && !inode_isdir(inode))
+    return file_open(inode);
+  else
+    return dir_open(inode); 
+}
+
+void filesys_close(struct file* file){
+  ASSERT(file != NULL);
+
+  if (!file_isdir(file))
+    file_close(file);
+  else
+    dir_close(file);
 }
 
 /* Deletes the file named NAME.
@@ -124,6 +154,11 @@ filesys_remove (const char *name)
     return false;
 
   if (!traverse(name, &dir, &dirname))
+    return false;
+
+  if (strcmp(dirname, "") == 0 
+      || strcmp(dirname, ".") == 0 
+      || strcmp(dirname, "..") == 0)
     return false;
 
   //printf("DEBUG: filesys_remove: dir=%p dirname=%s\n", dir, dirname);
@@ -154,24 +189,45 @@ bool filesys_chdir(const char* name){
     return false;
 
   //printf("DEBUG: traversed: parent=%p dirname=%s \n", parent, dirname);
+  struct dir* dir;
+  bool success = true;
 
-  /* lookup dir to change */
-  struct inode* idir;
-  if (!dir_lookup(parent, dirname, &idir))
-    return false;
+  if (strcmp(dirname, "") == 0){
+    if (dir_isroot(parent))
+      dir = dir_open_root();
+    else{
+      dir = parent;
+      parent = NULL;
+    }
+  }
+  else if (strcmp(dirname, ".") == 0){
+    dir = parent;
+    parent = NULL;
+  }
+  else if (strcmp(dirname, "..") == 0){
+    struct inode* inode;
+    success = dir_lookup_parent(parent, &inode);
+    dir = dir_open(inode);
+  }
+  else{
+    struct inode* idir;
+    success = dir_lookup(parent, dirname, &idir);
 
-  //printf("DEBUG: found \n");
-
-  dir_close(parent);
-  dir_close(thread_current()->current_dir);
-
-  struct dir* dir = dir_open(idir);
-  if (dir == NULL)
-    return false;
+    if (success){
+      dir = dir_open(idir);
+      success = dir != NULL;
+    }
+  }
   
-  thread_current()->current_dir = dir;
+  if (parent != NULL)
+    dir_close(parent);
 
-  return true;
+  if (success){
+    dir_close(thread_current()->current_dir);
+    thread_current()->current_dir = dir;
+  }
+
+  return success;
 };
 
 bool filesys_mkdir(const char* name){
@@ -179,6 +235,11 @@ bool filesys_mkdir(const char* name){
   char dirname[DIR_MAX_NAME];
 
   if (!traverse(name, &parent, &dirname))
+    return false;
+
+  if (strcmp(dirname, "") == 0 
+      || strcmp(dirname, ".") == 0 
+      || strcmp(dirname, "..") == 0)
     return false;
 
   /* check if it already exists */
@@ -203,27 +264,11 @@ bool filesys_mkdir(const char* name){
 };
 
 bool filesys_readdir(struct file* file, char* name){
-  struct dir* parent;
-  char dirname[DIR_MAX_NAME];
+  ASSERT(file != NULL);
+  ASSERT(name != NULL);
 
-  if (!traverse(name, &parent, &dirname))
-    return false;
-
-  /* check if folder exists */
-  struct inode* idir;
-  if (!dir_lookup(parent, dirname, &idir))
-    return false;
-
-  struct dir* dir = dir_open(idir);
-  if (dir == NULL)
-    return false;
-
-  bool success = dir_readdir(dir, dirname); 
-
-  dir_close(parent);
-  dir_close(dir);
-  return success;
-};
+  return dir_readdir(file, name);
+}
 
 bool filesys_isdir(struct file* file){
   ASSERT(file != NULL);

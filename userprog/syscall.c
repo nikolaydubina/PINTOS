@@ -157,7 +157,7 @@ static void syscall_exit(struct intr_frame* f){
   struct file* exec_file = thread_current()->exec_file;
   if (exec_file != NULL){
     file_allow_write(exec_file);
-    file_close(exec_file);
+    filesys_close(exec_file);
   }
 
   /* closing files */
@@ -167,7 +167,7 @@ static void syscall_exit(struct intr_frame* f){
   {
     struct file_descr* curr = list_entry(e, struct file_descr, elem);
     if (thread_current()->tid == curr->pid){
-      file_close(curr->file);
+      filesys_close(curr->file);
       e = list_remove(e);
     }
     else
@@ -493,7 +493,7 @@ static void syscall_close(struct intr_frame* f){
     return;
   }
 
-  file_close(fdescr->file);
+  filesys_close(fdescr->file);
   list_remove(&fdescr->elem);
   lock_release(&opened_files_lock);
 }
