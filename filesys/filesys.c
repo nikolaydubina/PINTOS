@@ -328,11 +328,11 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
   }
 
   strlcpy(entryname, &(path[count - 1]), len_token);
-  //printf("DEBUG: %s | last=%s\n", dirnamecpy, entryname);
+  //printf("DEBUG: travers: %s | last=%s\n", dirnamecpy, entryname);
  
   /* traversing path */
   struct dir* curr;
-  if (absolute || thread_current()->current_dir == NULL) // FIXME
+  if (absolute || thread_current()->current_dir == NULL) // FIXME O_o
     curr = dir_open_root();
   else
     curr = dir_reopen(thread_current()->current_dir);
@@ -349,9 +349,13 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
 
     dir_close(curr);
 
-    success = inode_isdir(next);
-    if (success)
+    if (!success || next == NULL)
+      return false;
+
+    if (inode_isdir(next))
       curr = dir_open(next);
+    else
+      return false;
   }
   
   if (success)
