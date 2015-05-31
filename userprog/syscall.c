@@ -405,7 +405,11 @@ static void syscall_write(struct intr_frame* f){
       return;
     }
 
-    f->eax = file_write(fdescr->file, buffer, asize);
+    int written = file_write(fdescr->file, buffer, asize);
+    if (written > 0)
+      f->eax = written;
+    else
+      f->eax = -1;
     lock_release(&opened_files_lock);
   }
 }

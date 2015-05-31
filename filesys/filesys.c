@@ -93,6 +93,10 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
+  /* incorrect address */
+  if (strcmp(name, "") == 0)
+    return NULL;
+
   /* lookup dir */
   struct dir* dir;
   char dirname[DIR_MAX_NAME];
@@ -126,17 +130,10 @@ filesys_open (const char *name)
 
   if (isfile && !inode_isdir(inode))
     return file_open(inode);
-  else
+  else{
+    inode_deny_write(inode);
     return dir_open(inode); 
-}
-
-void filesys_close(struct file* file){
-  ASSERT(file != NULL);
-
-  if (!file_isdir(file))
-    file_close(file);
-  else
-    dir_close(file);
+  }
 }
 
 /* Deletes the file named NAME.
@@ -363,3 +360,15 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
 
   return success;
 }
+
+void filesys_close(struct file* file){
+  ASSERT(file != NULL);
+
+  if (!file_isdir(file))
+    file_close(file);
+  else{
+    //inode_allow_write(dir_get_inode(file));
+    dir_close(file);
+  }
+}
+
