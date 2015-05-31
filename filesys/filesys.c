@@ -126,7 +126,8 @@ filesys_remove (const char *name)
   if (!traverse(name, &dir, &dirname))
     return false;
 
-  bool success = dir != NULL && dir_remove (dir, name);
+  //printf("DEBUG: filesys_remove: dir=%p dirname=%s\n", dir, dirname);
+  bool success = (dir != NULL) && dir_remove (dir, dirname);
   dir_close (dir); 
 
   return success;
@@ -161,6 +162,7 @@ bool filesys_chdir(const char* name){
 
   //printf("DEBUG: found \n");
 
+  dir_close(parent);
   dir_close(thread_current()->current_dir);
 
   struct dir* dir = dir_open(idir);
@@ -211,14 +213,14 @@ bool filesys_readdir(struct file* file, char* name){
   struct inode* idir;
   if (!dir_lookup(parent, dirname, &idir))
     return false;
-  dir_close(parent);
 
   struct dir* dir = dir_open(idir);
   if (dir == NULL)
     return false;
 
-  bool success = dir_readdir(dir, name); 
+  bool success = dir_readdir(dir, dirname); 
 
+  dir_close(parent);
   dir_close(dir);
   return success;
 };
@@ -300,9 +302,9 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
     else 
       success = dir_lookup(curr, path[i], &next);
 
-    success = inode_isdir(next);
     dir_close(curr);
 
+    success = inode_isdir(next);
     if (success)
       curr = dir_open(next);
   }

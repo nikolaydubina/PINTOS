@@ -361,20 +361,28 @@ inode_allow_write (struct inode *inode)
 
 /* Returns the length, in bytes, of INODE's data. */
 off_t
-inode_length (const struct inode *inode)
-{
+inode_length (const struct inode *inode){
+  ASSERT(inode != NULL);
   return inode->data.length;
 }
 
 /* true if inode is directory descriptor */
 bool inode_isdir(const struct inode* inode){
+  ASSERT(inode != NULL);
   return inode->isdir;
 }
 
 disk_sector_t get_parent_sector(const struct inode* inode){
+  ASSERT(inode != NULL);
   return inode->parent_sector;
 }
 
 bool inode_isused(const struct inode* inode){
-  return inode->open_cnt > 0;
+  ASSERT(inode != NULL);
+  return inode->open_cnt > 1;
+}
+
+bool inode_isremoved(const struct inode* inode){
+  ASSERT(inode != NULL);
+  return inode->removed;
 }
