@@ -3,6 +3,7 @@
 #include <string.h>
 #include <list.h>
 #include "threads/malloc.h"
+#include "threads/thread.h"
 #include "filesys/filesys.h"
 
 extern struct dir;
@@ -28,6 +29,9 @@ dir_create (disk_sector_t sector, size_t entry_cnt, disk_sector_t parent)
 struct dir *
 dir_open (struct inode *inode) {
   struct dir *dir = calloc (1, sizeof *dir);
+  //printf("DEBUG: diropen\n");
+  //if (inode_get_sector(dir->inode) == 0xa3)
+  //printf("DEBUG: dir_open: inode=%p\n", inode_get_sector(inode));
   if (inode != NULL && dir != NULL)
     {
       dir->inode = inode;
@@ -47,6 +51,7 @@ dir_open (struct inode *inode) {
 struct dir *
 dir_open_root (void)
 {
+  //printf("DEBUG: diropenroot\n");
   return dir_open (inode_open (ROOT_DIR_SECTOR));
 }
 
@@ -55,6 +60,8 @@ dir_open_root (void)
 struct dir *
 dir_reopen (struct dir *dir) 
 {
+  //printf("DEBUG: dirreopen\n");
+  //printf("DEBUG: dir_reopen: inode=%p\n",inode_get_sector(dir->inode));
   return dir_open (inode_reopen (dir->inode));
 }
 
@@ -62,6 +69,8 @@ dir_reopen (struct dir *dir)
 void
 dir_close (struct dir *dir) 
 {
+  //printf("DEBUG: dirclose: dir=%p\n", dir);
+  //printf("DEBUG: dir_close: inode=%p\n",inode_get_sector(dir->inode));
   if (dir != NULL)
     {
       inode_close (dir->inode);
@@ -210,8 +219,21 @@ dir_remove (struct dir *dir, const char *name)
     goto done;
 
   /* check if it is dir and opened */
-  if (inode_isdir(inode) && inode_isused(inode))
+  if (inode_isdir(inode) && !inode_isremoved(inode) && inode_isused(inode))
     goto done;
+
+  /* check if directory is empty */
+  struct dir* cdir = dir_open(inode);
+  if (!dir_isempty(cdir)){
+      dir_close(cdir);
+      goto done;
+  }
+  dir_close(cdir);
+
+  /* check if it is current dir */
+  if (inode_get_sector(inode) == 
+      inode_get_sector(dir_get_inode(thread_current()->current_dir)))
+    goto done;    
 
   /* Erase directory entry. */
   e.in_use = false;
@@ -245,4 +267,18 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
         } 
     }
   return false;
+}
+
+
+bool dir_isempty(struct dir *dir){
+  struct dir_entry e;
+  off_t curr_pos = 0;
+
+  while (inode_read_at (dir->inode, &e, sizeof e, curr_pos) == sizeof e)
+  {
+    curr_pos += sizeof e;
+    if (e.in_use)
+      return false;
+  }
+  return true;
 }
