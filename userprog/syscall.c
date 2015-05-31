@@ -361,7 +361,11 @@ static void syscall_read(struct intr_frame* f){
       safe_exit(-1);
     }
 
-    f->eax = file_read(fdescr->file, buffer, asize);
+    int read = file_read(fdescr->file, buffer, asize);
+    if (read == asize)
+      f->eax = read;
+    else
+      f->eax = -1;
     lock_release(&opened_files_lock);
   }
 }
@@ -406,7 +410,7 @@ static void syscall_write(struct intr_frame* f){
     }
 
     int written = file_write(fdescr->file, buffer, asize);
-    if (written > 0)
+    if (written == asize)
       f->eax = written;
     else
       f->eax = -1;
