@@ -282,3 +282,15 @@ bool dir_isempty(struct dir *dir){
   }
   return true;
 }
+
+bool dir_isroot(struct dir* dir){
+  ASSERT(dir != NULL);
+  return inode_get_sector(dir_get_inode(dir)) == ROOT_DIR_SECTOR;
+}
+
+bool dir_issame(struct dir* dira, struct dir* dirb){
+  ASSERT(dira != NULL);
+  ASSERT(dirb != NULL);
+  return inode_get_sector(dir_get_inode(dira)) == 
+         inode_get_sector(dir_get_inode(dirb));
+}
