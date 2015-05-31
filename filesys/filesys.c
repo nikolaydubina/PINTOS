@@ -51,17 +51,23 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size) 
 {
+  //printf("DEBUG: filesys_create: name=%s\n", name);
+  /* incorrect address */
+  if (strcmp(name, "") == 0)
+    return false;
+
   /* lookup dir */
   struct dir* dir;
   char dirname[DIR_MAX_NAME];
 
-  if (!traverse(name, &dir, &dirname))
+  if (!traverse(name, &dir, dirname))
     return false;
 
   if (strcmp(dirname, "") == 0 
       || strcmp(dirname, ".") == 0 
       || strcmp(dirname, "..") == 0)
     return false;
+
 
   /* check if file already exists */
   struct inode* idir;
@@ -101,7 +107,7 @@ filesys_open (const char *name)
   struct dir* dir;
   char dirname[DIR_MAX_NAME];
 
-  if (!traverse(name, &dir, &dirname))
+  if (!traverse(name, &dir, dirname))
     return NULL;
   if (dir == NULL)
     return NULL;
@@ -143,6 +149,10 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
+  /* incorrect address */
+  if (strcmp(name, "") == 0)
+    return false;
+
   /* lookup dir */
   struct dir* dir;
   char dirname[DIR_MAX_NAME];
@@ -150,7 +160,7 @@ filesys_remove (const char *name)
   if (strcmp(name, "/") == 0)
     return false;
 
-  if (!traverse(name, &dir, &dirname))
+  if (!traverse(name, &dir, dirname))
     return false;
 
   if (strcmp(dirname, "") == 0 
@@ -179,10 +189,14 @@ do_format (void)
 
 /* directories management */
 bool filesys_chdir(const char* name){
+  /* incorrect address */
+  if (strcmp(name, "") == 0)
+    return false;
+
   struct dir* parent;
   char dirname[DIR_MAX_NAME];
 
-  if (!traverse(name, &parent, &dirname))
+  if (!traverse(name, &parent, dirname))
     return false;
 
   //printf("DEBUG: traversed: parent=%p dirname=%s \n", parent, dirname);
@@ -228,10 +242,14 @@ bool filesys_chdir(const char* name){
 };
 
 bool filesys_mkdir(const char* name){
+  /* incorrect address */
+  if (strcmp(name, "") == 0)
+    return false;
+
   struct dir* parent;
   char dirname[DIR_MAX_NAME];
 
-  if (!traverse(name, &parent, &dirname))
+  if (!traverse(name, &parent, dirname))
     return false;
 
   if (strcmp(dirname, "") == 0 
@@ -263,6 +281,10 @@ bool filesys_mkdir(const char* name){
 bool filesys_readdir(struct file* file, char* name){
   ASSERT(file != NULL);
   ASSERT(name != NULL);
+
+  /* incorrect address */
+  if (strcmp(name, "") == 0)
+    return false;
 
   return dir_readdir(file, name);
 }
@@ -313,7 +335,7 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
 
     if (size + len_token > DIR_MAX_PATH ||
         count > DIR_MAX_DEPTH ||
-        len_token > DIR_MAX_NAME)
+        len_token - 1 > DIR_MAX_NAME)
     {
       return false;
     }
