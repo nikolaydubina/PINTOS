@@ -323,6 +323,7 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
 
   if (strcmp(dirnamecpy, "") == 0)
     return false;
+  //printf("DEBUG: treavese: strlen dirnamecpy=%d v=%s\n", strlen(dirnamecpy), dirnamecpy);
 
   char *token, *save_ptr;
   int len_token;
@@ -346,8 +347,13 @@ static bool traverse(const char* dirname, struct dir** dir, char* entryname){
     }
   }
 
-  strlcpy(entryname, &(path[count - 1]), len_token);
-  //printf("DEBUG: travers: %s | last=%s\n", dirnamecpy, entryname);
+  char *empty = "";
+  if (count > 0)
+    strlcpy(entryname, &(path[count - 1]), len_token);
+  else
+    entryname[0] = '\0';
+
+  //printf("DEBUG: travers: %s | first=%s last=%s\n", dirnamecpy, path[0], entryname);
  
   /* traversing path */
   struct dir* curr;
