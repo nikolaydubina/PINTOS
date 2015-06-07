@@ -14,11 +14,11 @@
 
 struct inode;
 
-/* A directory. */
+/* directory descriptor */
 struct dir 
   {
-    struct inode* inode;                /* Backing store. */
-    off_t pos;                          /* Current position. */
+    struct inode* inode;                /* directory inode */
+    off_t pos;                          /* current position */
   };
 
 /* Opening and closing directories. */
