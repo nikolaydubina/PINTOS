@@ -105,7 +105,10 @@ thread_init (void)
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
-  initial_thread->tid = allocate_tid (); 
+  initial_thread->tid = allocate_tid ();
+
+  /* set up process structures */
+  init_process();
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -294,7 +297,9 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  process_exit ();
+  struct thread* curr = thread_current();
+  notify_parent(curr->tid, curr->exit_status);
+  process_exit();
 #endif
 
   /* Just set our status to dying and schedule another process.
@@ -511,15 +516,14 @@ init_thread (struct thread *t, const char *name, int priority)
 
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
-  strlcpy (t->name, name, sizeof t->name);
+  strlcpy (t->name, name, sizeof(t->name));
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->set_priority = priority;
   t->magic = THREAD_MAGIC;
 
-  /* Initialize for priority donation */
-  list_init(&t->waiters);
-  list_init(&t->holders);
+  t->exit_status = -1;
+  t->exec_file = NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
