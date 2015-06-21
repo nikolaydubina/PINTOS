@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "filesys/filesys.h"
+#include "vm/page.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -106,6 +107,8 @@ struct thread
     int exit_status;                    /* exit status of thread */
     struct file* exec_file;
 #endif
+
+    struct page_table* page_table;      /* VM: pagetable descriptor reference */
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

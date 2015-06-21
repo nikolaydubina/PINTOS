@@ -11,4 +11,6 @@ void process_activate (void);
 void init_process(void);
 void notify_parent(int pid, int status);
 
+bool install_page (void *upage, void *kpage, bool writable);
+
 #endif /* userprog/process.h */

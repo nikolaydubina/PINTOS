@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <kern/list.h>
+#include "kernel/list.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -24,14 +24,14 @@
 #define MAX_ARGC 100
 #define MAX_ARGSIZE 4000
 
-static struct args_descr{
+struct args_descr{
   int argc;
   char **argv;
   bool loaded;
   struct semaphore sema_loaded;
 };
 
-static struct process_descr{
+struct process_descr{
   tid_t pid;
   tid_t parent_pid; 
   int exit_status;
@@ -150,6 +150,9 @@ start_process (void *args_r)
   struct intr_frame if_;
   bool success = false;
 
+  /* initialize page table */
+  page_construct();
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -243,6 +246,9 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+  /* removing page table */
+  page_destruct();
 }
 
 /* Sets up the CPU for running user code in the current
@@ -351,7 +357,8 @@ load (const char *file_name, void (**eip) (void), void **esp, args_descr* args)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  //printf("DEBUG: filesys open: %s\n", file_name);
+  file = filesys_open(file_name);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -442,7 +449,7 @@ load (const char *file_name, void (**eip) (void), void **esp, args_descr* args)
  done:
   /* We arrive here whether the load is successful or not. */
   if (!success)
-    file_close (file);
+    file_close(file);
   else{
     thread_current()->exec_file = file;
     file_deny_write(file);
@@ -453,7 +460,7 @@ load (const char *file_name, void (**eip) (void), void **esp, args_descr* args)
 
 /* load() helpers. */
 
-static bool install_page (void *upage, void *kpage, bool writable);
+bool install_page (void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -522,7 +529,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
-  file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Do calculate how to fill this page.
@@ -531,25 +537,12 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
+      /* adds page with file descriptor to pagetable. lazy loading file */
+      if (!page_insert_file(file, upage, page_read_bytes, page_zero_bytes, writable, ofs))
         return false;
-
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
+      
+      /* updating offset */
+      ofs += page_read_bytes;
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -564,57 +557,53 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp, args_descr* args) 
 {
-  uint8_t *kpage;
   bool success = false;
+ 
+  success = grow_stack(((uint8_t*)PHYS_BASE) - PGSIZE); 
+  if (!success)
+      return false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success){
-        char* addr = (char*)PHYS_BASE;
+  char* addr = (char*)PHYS_BASE;
 
-        int argc = args->argc;
-        /* arguments values */
-        int i;
-        for(i = argc - 1; i >= 0; --i){
-          int l = strlen(args->argv[i]) + 1;
-          addr -= l;
-          memcpy(addr, args->argv[i], l * sizeof(char));
-        }
+  int argc = args->argc;
 
-        /* alignment */
-        addr -= 4;
-        addr = (char*)((int)addr - ((int) addr % 4));
+  /* arguments values */
+  int i;
+  for(i = argc - 1; i >= 0; --i){
+    int l = strlen(args->argv[i]) + 1;
+    addr -= l;
+    memcpy(addr, args->argv[i], l * sizeof(char));
+  }
 
-        /* adding null address */
-        void* null_addr = NULL;
-        addr -= sizeof(void*);
-        memcpy(addr, &null_addr, sizeof(void*));
+  /* alignment */
+  addr -= 4;
+  addr = (char*)((int)addr - ((int) addr % 4));
 
-        /* arguments addresses */
-        char* argv_addr = (char*)PHYS_BASE;
-        for(i = argc - 1; i >= 0 ; --i){
-          argv_addr -= strlen(args->argv[i]) + 1;
-          addr -= sizeof(char*);
-          memcpy(addr, &argv_addr, sizeof(char*));
-        }
+  /* adding null address */
+  void* null_addr = NULL;
+  addr -= sizeof(void*);
+  memcpy(addr, &null_addr, sizeof(void*));
 
-        /* pointer to array of args, argc, return addr */
-        int* arg0 = addr, zero = 0;
-        addr -= sizeof(char**);
-        memcpy(addr, &arg0, sizeof(char*));
-        addr -= sizeof(int);
-        memcpy(addr, &argc, sizeof(int));
-        addr -= sizeof(char*);
-        memcpy(addr, &zero, sizeof(char*));
+  /* arguments addresses */
+  char* argv_addr = (char*)PHYS_BASE;
+  for(i = argc - 1; i >= 0 ; --i){
+    argv_addr -= strlen(args->argv[i]) + 1;
+    addr -= sizeof(char*);
+    memcpy(addr, &argv_addr, sizeof(char*));
+  }
 
-        *esp = addr;
-        //hex_dump((uintptr_t) (PHYS_BASE - 200), (void **) (PHYS_BASE - 200), 200, true);
-      }
-      else
-        palloc_free_page (kpage);
-    }
+  /* pointer to array of args, argc, return addr */
+  int* arg0 = addr, zero = 0;
+  addr -= sizeof(char**);
+  memcpy(addr, &arg0, sizeof(char*));
+  addr -= sizeof(int);
+  memcpy(addr, &argc, sizeof(int));
+  addr -= sizeof(char*);
+  memcpy(addr, &zero, sizeof(char*));
+
+  *esp = addr;
+  //hex_dump((uintptr_t) (PHYS_BASE - 200), (void **) (PHYS_BASE - 200), 200, true);
+
   return success;
 }
 
@@ -627,8 +616,7 @@ setup_stack (void **esp, args_descr* args)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool
-install_page (void *upage, void *kpage, bool writable)
+bool install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
 

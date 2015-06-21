@@ -34,6 +34,9 @@
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
 #endif
+#include "vm/frame.h"
+#include "vm/page.h"
+#include "vm/swap.h"
 
 /* Amount of physical memory, in 4 kB pages. */
 size_t ram_pages;
@@ -88,6 +91,10 @@ main (void)
   malloc_init ();
   paging_init ();
 
+  /* Initialize Virtual memory structures */
+  frame_init();
+  page_init();
+
   /* Segmentation. */
 #ifdef USERPROG
   tss_init ();
@@ -100,6 +107,7 @@ main (void)
   kbd_init ();
   input_init ();
 #ifdef USERPROG
+  init_process();
   exception_init ();
   syscall_init ();
 #endif
@@ -114,6 +122,9 @@ main (void)
   disk_init ();
   filesys_init (format_filesys);
 #endif
+  
+  /* swap should be after dick initialization for swap disk */
+  swap_init();
 
   printf ("Boot complete.\n");
   
