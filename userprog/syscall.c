@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <lib/kernel/console.h>
 #include <syscall-nr.h>
+#include "lib/string.h"
 #include "threads/malloc.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -8,6 +9,7 @@
 #include "threads/synch.h"
 #include "userprog/syscall.h"
 #include "vm/page.h"
+#include "filesys/filesys.h"
 
 #define ROBUST_BUFFER_CHECK false   /* requires a lot of resoruces */
 #define ERROR -1                    /* return value on failure */
@@ -38,6 +40,11 @@ static void syscall_tell(struct intr_frame*);
 static void syscall_close(struct intr_frame*);
 static void syscall_mmap(struct intr_frame* f);
 static void syscall_munmap(struct intr_frame* f);
+static void syscall_chdir(struct intr_frame*);
+static void syscall_mkdir(struct intr_frame*);
+static void syscall_readdir(struct intr_frame*);
+static void syscall_isdir(struct intr_frame*);
+static void syscall_inumber(struct intr_frame*);
 
 /* helper routine */
 static struct file_descr* lookup_file(int fid);
@@ -229,14 +236,22 @@ static void syscall_handler (struct intr_frame* f){
     case SYS_MUNMAP:
       syscall_munmap(f);
       break;
-
     /* Project 4 only. */
-    //SYS_CHDIR,                  /* Change the current directory. */
-    //SYS_MKDIR,                  /* Create a directory. */
-    //SYS_READDIR,                /* Reads a directory entry. */
-    //SYS_ISDIR,                  /* Tests if a fd represents a directory. */
-    //SYS_INUMBER                 /* Returns the inode number for a fd. */
-
+    case SYS_CHDIR:                  
+      syscall_chdir(f);
+      break;
+    case SYS_MKDIR:                  
+      syscall_mkdir(f);
+      break;
+    case SYS_READDIR:                
+      syscall_readdir(f);
+      break;
+    case SYS_ISDIR:                  
+      syscall_isdir(f);
+      break;
+    case SYS_INUMBER:                 
+      syscall_inumber(f);
+      break;
     default:
       printf("ERROR!\n");
   }
@@ -264,7 +279,7 @@ static void syscall_exit(struct intr_frame* f){
   struct file* exec_file = thread_current()->exec_file;
   if (exec_file != NULL){
     file_allow_write(exec_file);
-    file_close(exec_file);
+    filesys_close(exec_file);
   }
 
   /* closing files */
@@ -274,7 +289,7 @@ static void syscall_exit(struct intr_frame* f){
   {
     struct file_descr* curr = list_entry(e, struct file_descr, elem);
     if (thread_current()->tid == curr->pid){
-      file_close(curr->file);
+      filesys_close(curr->file);
       e = list_remove(e);
     }
     else
@@ -334,6 +349,9 @@ static void syscall_create(struct intr_frame* f){
   if (!correct_string(file, f->esp))
     safe_exit(ERROR);
     
+  if (!(correct_pointer(file) && file != NULL))
+    safe_exit(-1);
+
   lock_acquire(&opened_files_lock);
   bool success = filesys_create(file, initial_size);
   f->eax = success;
@@ -353,8 +371,11 @@ static void syscall_remove(struct intr_frame* f){
 
   lock_acquire(&opened_files_lock);
 
-  if (!filesys_remove(filename))
-    safe_exit(ERROR);
+  if (!filesys_remove(filename)){
+    lock_release(&opened_files_lock);
+    f->eax = 0;
+    return;
+  }
 
   lock_release(&opened_files_lock);
 }
@@ -451,7 +472,11 @@ static void syscall_read(struct intr_frame* f){
       safe_exit(ERROR);
     }
 
-    f->eax = file_read(fdescr->file, buffer, size);
+    int read = file_read(fdescr->file, buffer, asize);
+    if (read == asize)
+      f->eax = read;
+    else
+      f->eax = -1;
     lock_release(&opened_files_lock);
   }
 }
@@ -487,7 +512,12 @@ static void syscall_write(struct intr_frame* f){
       return;
     }
 
-    f->eax = file_write(fdescr->file, buffer, size);
+    int written = file_write(fdescr->file, buffer, asize);
+    if (written == asize)
+      f->eax = written;
+    else
+      f->eax = -1;
+    lock_release(&opened_files_lock);
   }
   lock_release(&opened_files_lock);
 }
@@ -572,7 +602,7 @@ static void syscall_close(struct intr_frame* f){
   if (fdescr->is_mmap)
     page_update_mmap_file(fdescr->mmap_id, false);
 
-  file_close(fdescr->file);
+  filesys_close(fdescr->file);
   list_remove(&fdescr->elem);
 
   lock_release(&opened_files_lock);
@@ -651,7 +681,111 @@ static void syscall_munmap(struct intr_frame* f){
 
 /* helper routine */
 
-/* retrieves file descrtiptor
+/* retrieves file descrtiptor */
+/* Change the current directory. */
+static void syscall_chdir(struct intr_frame* f){
+  const char* dir;
+
+  if (!(correct_pointer(f->esp) &&
+        correct_pointer(f->esp + 4)))
+    safe_exit(-1);
+
+  memcpy(&dir, f->esp + 4, 4);
+
+  if (!(correct_pointer(dir) && dir != NULL))
+    safe_exit(-1);
+   
+  f->eax = filesys_chdir(dir);
+  return;
+}
+
+/* Create a directory. */
+static void syscall_mkdir(struct intr_frame* f){
+  const char* dir;
+
+  if (!(correct_pointer(f->esp) &&
+        correct_pointer(f->esp + 4)))
+    safe_exit(-1);
+
+  memcpy(&dir, f->esp + 4, 4);
+
+  if (!(correct_pointer(dir) && dir != NULL))
+    safe_exit(-1);
+   
+  f->eax = filesys_mkdir(dir);
+  return;
+}
+
+/* Reads a directory entry. */
+static void syscall_readdir(struct intr_frame* f){
+  int fd;
+  char* dir;
+
+  if (!(correct_pointer(f->esp) &&
+        correct_pointer(f->esp + 4) &&
+        correct_pointer(f->esp + 8)))
+    safe_exit(-1);
+
+  memcpy(&fd, f->esp + 4, 4);
+  memcpy(&dir, f->esp + 8, 4);
+
+  if (!(correct_pointer(dir) &&
+        correct_pointer(dir + DIR_MAX_NAME + 1) && 
+        dir != NULL))
+    safe_exit(-1);
+   
+  struct file_descr* entry = lookup_file(fd);
+ 
+  if (entry == NULL){
+    f->eax = false;
+    return;
+  }
+
+  if (!filesys_isdir(entry->file)){
+    f->eax = false;
+    return;
+  }
+
+  f->eax = filesys_readdir(entry->file, dir);
+  return true;
+}
+
+/* Tests if a fd represents a directory. */
+static void syscall_isdir(struct intr_frame* f){
+  int fd;
+
+  if (!(correct_pointer(f->esp) &&
+        correct_pointer(f->esp + 4)))
+    safe_exit(-1);
+
+  memcpy(&fd, f->esp + 4, 4);
+   
+  struct file_descr* entry = lookup_file(fd);
+  
+  f->eax = filesys_isdir(entry->file);
+  return;
+}
+
+/* Returns the inode number for a fd. */
+static void syscall_inumber(struct intr_frame* f){
+  int fd;
+
+  if (!(correct_pointer(f->esp) &&
+        correct_pointer(f->esp + 4)))
+    safe_exit(-1);
+
+  memcpy(&fd, f->esp + 4, 4);
+   
+  struct file_descr* entry = lookup_file(fd);
+
+  if (entry != NULL)
+    f->eax = filesys_getinumber(entry->file);
+  else
+    f->eax = -1;
+  return;
+}
+
+/* helper function. retrieves file descrtiptor
  * from opened files list
  * NOT thread safe */
 static struct file_descr* lookup_file(int fid){

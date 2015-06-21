@@ -2,16 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <list.h>
-#include "filesys/filesys.h"
-#include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
+#include "filesys/filesys.h"
 
-/* A directory. */
-struct dir 
-  {
-    struct inode *inode;                /* Backing store. */
-    off_t pos;                          /* Current position. */
-  };
+extern struct dir;
 
 /* A single directory entry. */
 struct dir_entry 
@@ -22,19 +17,21 @@ struct dir_entry
   };
 
 /* Creates a directory with space for ENTRY_CNT entries in the
-   given SECTOR.  Returns true if successful, false on failure. */
+   given SECTOR. Returns true if successful, false on failure. */
 bool
-dir_create (disk_sector_t sector, size_t entry_cnt) 
+dir_create (disk_sector_t sector, size_t entry_cnt, disk_sector_t parent) 
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  return inode_create (sector, entry_cnt * sizeof (struct dir_entry), true, parent);
 }
 
 /* Opens and returns the directory for the given INODE, of which
    it takes ownership.  Returns a null pointer on failure. */
 struct dir *
-dir_open (struct inode *inode) 
-{
+dir_open (struct inode *inode) {
   struct dir *dir = calloc (1, sizeof *dir);
+  //printf("DEBUG: diropen\n");
+  //if (inode_get_sector(dir->inode) == 0xa3)
+  //printf("DEBUG: dir_open: inode=%p\n", inode_get_sector(inode));
   if (inode != NULL && dir != NULL)
     {
       dir->inode = inode;
@@ -54,6 +51,7 @@ dir_open (struct inode *inode)
 struct dir *
 dir_open_root (void)
 {
+  //printf("DEBUG: diropenroot\n");
   return dir_open (inode_open (ROOT_DIR_SECTOR));
 }
 
@@ -62,6 +60,8 @@ dir_open_root (void)
 struct dir *
 dir_reopen (struct dir *dir) 
 {
+  //printf("DEBUG: dirreopen\n");
+  //printf("DEBUG: dir_reopen: inode=%p\n",inode_get_sector(dir->inode));
   return dir_open (inode_reopen (dir->inode));
 }
 
@@ -69,6 +69,8 @@ dir_reopen (struct dir *dir)
 void
 dir_close (struct dir *dir) 
 {
+  //printf("DEBUG: dirclose: dir=%p\n", dir);
+  //printf("DEBUG: dir_close: inode=%p\n",inode_get_sector(dir->inode));
   if (dir != NULL)
     {
       inode_close (dir->inode);
@@ -132,6 +134,19 @@ dir_lookup (const struct dir *dir, const char *name,
   return *inode != NULL;
 }
 
+/* returns true if dir has parent dir
+ * otherwise false
+ * sets indode accordingly.
+ * The caller must close *INODE */
+bool dir_lookup_parent (const struct dir* dir, struct inode** inode){
+  ASSERT(dir != NULL);
+  ASSERT(inode != NULL);
+
+  *inode = inode_open_parent(dir->inode);
+
+  return *inode != NULL;
+}
+
 /* Adds a file named NAME to DIR, which must not already contain a
    file by that name.  The file's inode is in sector
    INODE_SECTOR.
@@ -174,6 +189,8 @@ dir_add (struct dir *dir, const char *name, disk_sector_t inode_sector)
   e.inode_sector = inode_sector;
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
 
+  //printf("DEBUG: dir_add: inode_sector=%p name=[%s]\n", inode_sector, name);
+
  done:
   return success;
 }
@@ -200,6 +217,23 @@ dir_remove (struct dir *dir, const char *name)
   inode = inode_open (e.inode_sector);
   if (inode == NULL)
     goto done;
+
+  /* check if it is dir and opened */
+  if (inode_isdir(inode) && !inode_isremoved(inode) && inode_isused(inode))
+    goto done;
+
+  /* check if directory is empty */
+  struct dir* cdir = dir_open(inode);
+  if (!dir_isempty(cdir)){
+      dir_close(cdir);
+      goto done;
+  }
+  dir_close(cdir);
+
+  /* check if it is current dir */
+  if (inode_get_sector(inode) == 
+      inode_get_sector(dir_get_inode(thread_current()->current_dir)))
+    goto done;    
 
   /* Erase directory entry. */
   e.in_use = false;
@@ -233,4 +267,30 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
         } 
     }
   return false;
+}
+
+
+bool dir_isempty(struct dir *dir){
+  struct dir_entry e;
+  off_t curr_pos = 0;
+
+  while (inode_read_at (dir->inode, &e, sizeof e, curr_pos) == sizeof e)
+  {
+    curr_pos += sizeof e;
+    if (e.in_use)
+      return false;
+  }
+  return true;
+}
+
+bool dir_isroot(struct dir* dir){
+  ASSERT(dir != NULL);
+  return inode_get_sector(dir_get_inode(dir)) == ROOT_DIR_SECTOR;
+}
+
+bool dir_issame(struct dir* dira, struct dir* dirb){
+  ASSERT(dira != NULL);
+  ASSERT(dirb != NULL);
+  return inode_get_sector(dir_get_inode(dira)) == 
+         inode_get_sector(dir_get_inode(dirb));
 }

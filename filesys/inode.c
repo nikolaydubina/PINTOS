@@ -17,7 +17,9 @@ struct inode_disk
     disk_sector_t start;                /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[125];               /* Not used. */
+    uint32_t isdir;                     /* 0 if file. not 0 if dir */
+    disk_sector_t parent_sector;        /* sector of parent inode */
+    uint32_t unused[123];               /* Not used. */
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -36,6 +38,8 @@ struct inode
     int open_cnt;                       /* Number of openers. */
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+    uint32_t isdir;                     /* 0 if file. not 0 if dir */
+    disk_sector_t parent_sector;        /* sector of parent inode */
     struct inode_disk data;             /* Inode content. */
   };
 
@@ -70,7 +74,7 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (disk_sector_t sector, off_t length)
+inode_create (disk_sector_t sector, off_t length, bool isdir, disk_sector_t parent_sector)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -87,16 +91,19 @@ inode_create (disk_sector_t sector, off_t length)
       size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
+      disk_inode->isdir = isdir ? 1 : 0;
+      disk_inode->parent_sector = parent_sector;
+
       if (free_map_allocate (sectors, &disk_inode->start))
         {
-          disk_write (filesys_disk, sector, disk_inode);
+          cache_write (filesys_disk, sector, disk_inode);
           if (sectors > 0) 
             {
               static char zeros[DISK_SECTOR_SIZE];
               size_t i;
               
               for (i = 0; i < sectors; i++) 
-                disk_write (filesys_disk, disk_inode->start + i, zeros); 
+                cache_write (filesys_disk, disk_inode->start + i, zeros); 
             }
           success = true; 
         } 
@@ -137,7 +144,13 @@ inode_open (disk_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  disk_read (filesys_disk, inode->sector, &inode->data);
+
+  cache_read(filesys_disk, inode->sector, &inode->data);
+  
+  /* directory structure */
+  inode->isdir = inode->data.isdir != 0;
+  inode->parent_sector = inode->data.parent_sector;
+
   return inode;
 }
 
@@ -150,13 +163,22 @@ inode_reopen (struct inode *inode)
   return inode;
 }
 
+/* if current inode is dir, then opens inode for it's parent dir */
+struct inode *inode_open_parent(struct inode* current){
+  if (!current->isdir)
+    return NULL;
+
+  return inode_open(current->parent_sector);
+}
+
 /* Returns INODE's inode number. */
-disk_sector_t
-inode_get_inumber (const struct inode *inode)
-{
+uint32_t inode_get_inumber (const struct inode *inode){
   return inode->sector;
 }
 
+disk_sector_t inode_get_sector(const struct inode* inode){
+  return inode->sector;
+}
 /* Closes INODE and writes it to disk.
    If this was the last reference to INODE, frees its memory.
    If INODE was also a removed inode, frees its blocks. */
@@ -223,7 +245,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       if (sector_ofs == 0 && chunk_size == DISK_SECTOR_SIZE) 
         {
           /* Read full sector directly into caller's buffer. */
-          disk_read (filesys_disk, sector_idx, buffer + bytes_read); 
+          cache_read (filesys_disk, sector_idx, buffer + bytes_read); 
         }
       else 
         {
@@ -235,7 +257,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
               if (bounce == NULL)
                 break;
             }
-          disk_read (filesys_disk, sector_idx, bounce);
+          cache_read (filesys_disk, sector_idx, bounce);
           memcpy (buffer + bytes_read, bounce + sector_ofs, chunk_size);
         }
       
@@ -284,7 +306,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       if (sector_ofs == 0 && chunk_size == DISK_SECTOR_SIZE) 
         {
           /* Write full sector directly to disk. */
-          disk_write (filesys_disk, sector_idx, buffer + bytes_written); 
+          cache_write (filesys_disk, sector_idx, buffer + bytes_written); 
         }
       else 
         {
@@ -300,11 +322,11 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
              we're writing, then we need to read in the sector
              first.  Otherwise we start with a sector of all zeros. */
           if (sector_ofs > 0 || chunk_size < sector_left) 
-            disk_read (filesys_disk, sector_idx, bounce);
+            cache_read (filesys_disk, sector_idx, bounce);
           else
             memset (bounce, 0, DISK_SECTOR_SIZE);
           memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
-          disk_write (filesys_disk, sector_idx, bounce); 
+          cache_write (filesys_disk, sector_idx, bounce); 
         }
 
       /* Advance. */
@@ -339,7 +361,28 @@ inode_allow_write (struct inode *inode)
 
 /* Returns the length, in bytes, of INODE's data. */
 off_t
-inode_length (const struct inode *inode)
-{
+inode_length (const struct inode *inode){
+  ASSERT(inode != NULL);
   return inode->data.length;
+}
+
+/* true if inode is directory descriptor */
+bool inode_isdir(const struct inode* inode){
+  ASSERT(inode != NULL);
+  return inode->isdir;
+}
+
+disk_sector_t get_parent_sector(const struct inode* inode){
+  ASSERT(inode != NULL);
+  return inode->parent_sector;
+}
+
+bool inode_isused(const struct inode* inode){
+  ASSERT(inode != NULL);
+  return inode->open_cnt > 1;
+}
+
+bool inode_isremoved(const struct inode* inode){
+  ASSERT(inode != NULL);
+  return inode->removed;
 }

@@ -299,6 +299,8 @@ thread_exit (void)
   process_exit();
 #endif
 
+  dir_close(curr->current_dir);
+
   /* Just set our status to dying and schedule another process.
      We will be destroyed during the call to schedule_tail(). */
   intr_disable ();
@@ -521,6 +523,8 @@ init_thread (struct thread *t, const char *name, int priority)
 
   t->exit_status = -1;
   t->exec_file = NULL;
+
+  t->current_dir = NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

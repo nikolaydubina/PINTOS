@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "filesys/directory.h"
 #include "filesys/filesys.h"
 #include "vm/page.h"
 
@@ -109,6 +110,8 @@ struct thread
 #endif
 
     struct page_table* page_table;      /* VM: pagetable descriptor reference */
+    /* file system */
+    struct dir* current_dir;            /* current directory */
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

@@ -166,3 +166,17 @@ file_tell (struct file *file)
   ASSERT (file != NULL);
   return file->pos;
 }
+
+/* returns inumber of corresponding to file inode */
+uint32_t file_getinumber(struct file* file){
+  ASSERT(file != NULL);
+
+  return inode_get_sector(file->inode);
+}
+
+/* true if file is dir, otherwise false */
+bool file_isdir(struct file* file){
+  ASSERT(file != NULL);
+
+  return inode_isdir(file->inode);
+}
