@@ -7,7 +7,9 @@
 #include "threads/io.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-  
+
+#include "lib/kernel/list.h"
+ 
 /* See [8254] for hardware details of the 8254 timer chip. */
 
 #if TIMER_FREQ < 19
@@ -29,6 +31,14 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 
+static struct list wthread_list;
+
+static struct wthread {
+  struct list_elem elem;
+  int64_t tick;           // absolute
+  struct thread* thread;  // thread
+};
+
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
    corresponding interrupt. */
@@ -44,6 +54,8 @@ timer_init (void)
   outb (0x40, count >> 8);
 
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+
+  list_init(&wthread_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -92,15 +104,42 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
+/* Orders waiting threads descriptins based on ticks */
+bool wthread_less(const struct list_elem* a, const struct list_elem* b, void* aux){
+  struct wthread* aw = list_entry(a, struct wthread, elem);
+  struct wthread* bw = list_entry(b, struct wthread, elem);
+
+  bool ret;
+
+  if(aw->tick == bw->tick)
+    ret = aw->thread->priority > bw->thread->priority;
+  else
+    ret = aw->tick < bw->tick;
+
+  return ret;
+}
+
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  struct wthread new_wthread;
+  new_wthread.tick = timer_ticks() + abs(ticks); // NOTE: ticks < 0 -> abs(ticks)
+  new_wthread.thread = thread_current ();
+  
+  intr_disable();
+  list_insert_ordered(&wthread_list, &(new_wthread.elem), wthread_less, NULL);
 
-  ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  thread_block();
+  /* 
+   * no need to set previous interrupt level,
+   * because thread at this point becomes in ready state
+   * and next by scheduler dispatch it can become running and
+   * handle interrupts.
+   * i.e. 
+   * it is not job of this function
+   * enabling interrupts should be done by scheduler dispatch
+   */
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -136,7 +175,18 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_tick ();
+  if (!list_empty(&wthread_list)){
+
+    struct list_elem* e = list_begin(&wthread_list);
+    struct wthread* curr = list_entry(e, struct wthread, elem);
+
+    while((e != list_end(&wthread_list)) && (curr->tick <= ticks)){
+      thread_unblock(curr->thread);
+      e = list_remove(e);
+      curr = list_entry(e, struct wthread, elem);
+    }
+  }
+  thread_tick();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
