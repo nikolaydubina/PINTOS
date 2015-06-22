@@ -1,6 +1,6 @@
 # pintos
 
-Were used as course projects in CS330 at KAIST Spring 2015
+Were used as course projects in CS330 Operating Systems and Lab at KAIST Spring 2015
 
 [Official guidline](http://web.stanford.edu/class/cs140/projects/pintos/pintos.html)
 
